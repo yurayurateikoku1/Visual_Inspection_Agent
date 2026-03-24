@@ -1,0 +1,47 @@
+{
+    "cameras": [
+        {
+            "id": "cam_1",
+            "name": "相机1-正面",
+            "ip": "192.168.1.101",
+            "exposure_time": 10000.0,
+            "gain": 0.0,
+            "trigger_mode": 1,
+            "rotation_deg": 0
+        },
+        {
+            "id": "cam_2",
+            "name": "相机2-侧面",
+            "ip": "192.168.1.102",
+            "exposure_time": 8000.0,
+            "gain": 2.0,
+            "trigger_mode": 1,
+            "rotation_deg": 90
+        }
+    ],
+    "communications": [
+        {
+            "id": "plc_1",
+            "name": "主PLC",
+            "protocol": "modbus_tcp",
+            "ip": "192.168.1.200",
+            "port": 502
+        }
+    ],
+    "workflows": [
+        {
+            "id": "wf_1",
+            "name": "正面检测",
+            "camera_id": "cam_1",
+            "algorithm_ids": [],
+            "comm_id": "plc_1"
+        },
+        {
+            "id": "wf_2",
+            "name": "侧面检测",
+            "camera_id": "cam_2",
+            "algorithm_ids": [],
+            "comm_id": "plc_1"
+        }
+    ]
+}

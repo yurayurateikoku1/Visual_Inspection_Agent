@@ -1,0 +1,141 @@
+QMainWindow {
+    background-color: white;
+}
+QWidget {
+    font-family: "Microsoft YaHei";
+    font-size: 14px;
+    background-color: white;
+}
+
+QPushButton {
+    background-color: #1eb2f7;
+    color: white;
+
+    border: none;
+    border-radius: 16px;
+
+    padding: 13px 19px;
+
+    font-size: 15px;
+    font-weight: bold;
+
+
+    border-bottom: 4px solid #1899d6;
+}
+
+QPushButton:hover {
+    background-color: #81c8fd;
+}
+
+QPushButton:pressed {
+    border-bottom: 0px;          
+    padding-top: 15px;           
+    padding-bottom: 11px;
+}
+
+
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 12px;              /* 圆形关键 */
+
+    background-color: #E5E6EB;          /* 未选中灰色 */
+    border: 3px solid #ddd;          /* 浅边框 */
+}
+
+QCheckBox::indicator:checked {
+    background-color: #4CAF50;       /* 绿色（信号灯） */
+    border: 3px solid #a5d6a7;       /* 浅绿色边框 */
+}
+
+QDoubleSpinBox {
+    min-height: 32px;            
+	min-width:0px;
+}
+
+
+QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: left center; 
+    width: 32px;
+    height: 32px;
+    margin: 0;
+	border:none; 
+}
+
+QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: right center; 
+    width: 32px;
+    height: 32px;
+    margin: 0;
+	border:none; 
+}
+
+QDoubleSpinBox::up-button:hover,
+QDoubleSpinBox::down-button:hover {
+	background: #eeeeee;  
+}
+
+QDoubleSpinBox::up-button:pressed,
+QDoubleSpinBox::down-button:pressed {
+	background: #d0d0d0;  
+}
+
+QDoubleSpinBox::up-arrow {
+    image: url(:/assets/add.png);  
+    width: 32px;                  
+    height: 32px;
+}
+
+QDoubleSpinBox::down-arrow {
+    image: url(:/assets/subtract.png); 
+    width: 32px;
+    height: 32px;
+}
+
+
+QSpinBox {
+    min-height: 32px;            
+}
+
+
+QSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: left center; 
+    width: 32px;
+    height: 32px;
+    margin: 0;
+	border:none; 
+}
+
+QSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: right center; 
+    width: 32px;
+    height: 32px;
+    margin: 0;
+	border:none; 
+}
+
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover {
+	background: #eeeeee;  
+}
+
+QSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed {
+	background: #d0d0d0;  
+}
+
+QSpinBox::up-arrow {
+    image: url(:/assets/add.png);  
+    width: 32px;                  
+    height: 32px;
+}
+
+QSpinBox::down-arrow {
+    image: url(:/assets/subtract.png); 
+    width: 32px;
+    height: 32px;
+}

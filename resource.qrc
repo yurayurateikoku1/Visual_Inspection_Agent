@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <file>assets/add.png</file>
+        <file>assets/guanli.png</file>
+        <file>assets/qukuai.png</file>
+        <file>assets/jiekoupeizhi.png</file>
+        <file>assets/subtract.png</file>
+        <file>assets/user.png</file>
+        <file>assets/tupian.png</file>
+        <file>src/style/style.qss</file>
+    </qresource>
+</RCC>
