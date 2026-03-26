@@ -2,8 +2,8 @@
 #include <QVariant>
 #include <spdlog/spdlog.h>
 
-ModbusRtuClient::ModbusRtuClient(const std::string &id, QObject *parent)
-    : ModbusClientBase(id, parent)
+ModbusRtuClient::ModbusRtuClient(const std::string &name, QObject *parent)
+    : ModbusClientBase(name, parent)
 {
     client_ = new QModbusRtuSerialClient(this);
     client_->setTimeout(timeout_ms_);

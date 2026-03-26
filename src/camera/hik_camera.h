@@ -102,16 +102,16 @@ public:
     /// @return
     bool softTrigger() override;
 
-    std::string getId() const override { return config_.id; }
+    std::string getId() const override { return camera_param_.name; }
 
-    std::string getName() const override { return config_.name; }
+    std::string getName() const override { return camera_param_.name; }
 
     /// @brief 设置回调
     /// @param cb
     void setCallback(ICameraCallback *cb) override { callback_ = cb; }
 
     /// @brief 获取相机配置（重连时用）
-    const CameraParam &config() const { return config_; }
+    const CameraParam &config() const { return camera_param_; }
 
     /// @brief 尝试重连（关闭旧连接 → 重新枚举 → 打开 → 开始采集）
     /// @return true 重连成功
@@ -147,7 +147,7 @@ private:
     HalconCpp::HObject convertToHobject(unsigned char *p_data, MV_FRAME_OUT_INFO_EX *p_frameinfo);
 
     void *handle_ = nullptr;              // 相机句柄
-    CameraParam config_;                  // 相机配置
+    CameraParam camera_param_;            // 相机配置
     std::atomic<bool> opened_{false};     // 相机是否打开
     std::atomic<bool> grabbing_{false};   // 是否正在抓图
     ICameraCallback *callback_ = nullptr; // 指向 ICameraCallback

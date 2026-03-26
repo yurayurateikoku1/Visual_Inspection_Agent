@@ -9,7 +9,7 @@ class ModbusTcpClient : public ModbusClientBase
 {
     Q_OBJECT
 public:
-    explicit ModbusTcpClient(const std::string &id, QObject *parent = nullptr);
+    explicit ModbusTcpClient(const std::string &name, QObject *parent = nullptr);
 
     bool connectDevice(const CommunicationParam &config) override;
 };

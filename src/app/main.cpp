@@ -5,9 +5,13 @@
 #include <QFile>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <cstdlib>
 
 int main(int argc, char *argv[])
 {
+    // Halcon 环境变量
+    _putenv_s("HALCONROOT", "D:\\C++Library\\haclon-25.11SDK");
+    _putenv_s("HALCONARCH", "x64-win64");
 
     spdlog::set_default_logger(spdlog::stdout_color_mt("console"));
 

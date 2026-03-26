@@ -25,9 +25,6 @@ bool AlgorithmNode::execute(NodeContext &ctx)
     {
         ctx.result.pass = false;
     }
-    ctx.result.defect_regions.insert(ctx.result.defect_regions.end(),
-                                     result.defect_regions.begin(),
-                                     result.defect_regions.end());
     ctx.result.detail += result.detail + "; ";
 
     // 在 display_image 上绘制检测框（使用 Halcon 绘图）

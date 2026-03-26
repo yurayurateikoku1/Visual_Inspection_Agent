@@ -13,7 +13,7 @@ public:
     bool init(const std::string &db_path = "data/inspection.db");
     void close();
 
-    bool saveResult(const std::string &camera_id, const InspectionResult &result);
+    bool saveResult(const std::string &camera_name, const InspectionResult &result);
     int queryPassCount(int64_t from_ms, int64_t to_ms);
     int queryNgCount(int64_t from_ms, int64_t to_ms);
 

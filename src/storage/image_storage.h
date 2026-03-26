@@ -10,7 +10,7 @@ public:
 
     void setBaseDir(const std::string &dir);
 
-    std::string saveImage(const std::string &camera_id, const HalconCpp::HObject &image,
+    std::string saveImage(const std::string &camera_name, const HalconCpp::HObject &image,
                           bool is_ng = false);
 
     void cleanOldImages(int keep_days = 30);

@@ -2,8 +2,8 @@
 #include <spdlog/spdlog.h>
 #include <QModbusReply>
 
-ModbusClientBase::ModbusClientBase(const std::string &id, QObject *parent)
-    : QObject(parent), id_(id)
+ModbusClientBase::ModbusClientBase(const std::string &name, QObject *parent)
+    : QObject(parent), id_(name)
 {
 }
 

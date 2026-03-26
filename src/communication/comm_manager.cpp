@@ -41,7 +41,7 @@ void CommManager::shutdown()
                               {
         if (io_timer_) io_timer_->stop();
         if (conn_timer_) conn_timer_->stop();
-        for (auto &[id, comm] : comms_)
+        for (auto &[name, comm] : comms_)
             comm->disconnectDevice();
         comms_.clear();
         if (light_ctrl_) light_ctrl_->close(); }, Qt::BlockingQueuedConnection);
@@ -54,9 +54,9 @@ void CommManager::shutdown()
 
 void CommManager::addComm(const CommunicationParam &config)
 {
-    if (comms_.count(config.id))
+    if (comms_.count(config.name))
     {
-        spdlog::warn("Comm {} already exists", config.id);
+        spdlog::warn("Comm {} already exists", config.name);
         return;
     }
 
@@ -64,27 +64,26 @@ void CommManager::addComm(const CommunicationParam &config)
     switch (config.protocol)
     {
     case CommProtocol::ModbusTCP:
-        comm = std::make_unique<ModbusTcpClient>(config.id);
+        comm = std::make_unique<ModbusTcpClient>(config.name);
         break;
     case CommProtocol::ModbusRTU:
-        comm = std::make_unique<ModbusRtuClient>(config.id);
+        comm = std::make_unique<ModbusRtuClient>(config.name);
         break;
     }
 
     if (comm->connectDevice(config))
     {
-        SPDLOG_INFO("Comm [{}] ({}) connecting, protocol={}",
-                    config.id, config.name,
+        SPDLOG_INFO("Comm [{}] connecting, protocol={}",
+                    config.name,
                     config.protocol == CommProtocol::ModbusTCP ? "TCP" : "RTU");
-        comm_configs_[config.id] = config;  // 保存配置用于重连
-        comms_[config.id] = std::move(comm);
+        comm_configs_[config.name] = config;
+        comms_[config.name] = std::move(comm);
     }
     else
     {
-        SPDLOG_ERROR("Comm [{}] connect failed", config.id);
-        // 连接失败也保存配置和实例，后续定时器会自动重连
-        comm_configs_[config.id] = config;
-        comms_[config.id] = std::move(comm);
+        SPDLOG_ERROR("Comm [{}] connect failed", config.name);
+        comm_configs_[config.name] = config;
+        comms_[config.name] = std::move(comm);
     }
 }
 
@@ -94,30 +93,30 @@ void CommManager::disconnectAll()
         io_timer_->stop();
     if (conn_timer_)
         conn_timer_->stop();
-    for (auto &[id, comm] : comms_)
+    for (auto &[name, comm] : comms_)
         comm->disconnectDevice();
     comms_.clear();
     if (light_ctrl_)
         light_ctrl_->close();
 }
 
-void CommManager::writeSingleCoil(const std::string &comm_id, uint16_t addr, bool value)
+void CommManager::writeSingleCoil(const std::string &comm_name, uint16_t addr, bool value)
 {
-    auto it = comms_.find(comm_id);
+    auto it = comms_.find(comm_name);
     if (it == comms_.end() || !it->second->isConnected())
     {
-        SPDLOG_WARN("Comm {} not connected for coil write", comm_id);
+        SPDLOG_WARN("Comm {} not connected for coil write", comm_name);
         return;
     }
     it->second->writeSingleCoil(addr, value);
 }
 
-void CommManager::writeMultipleRegisters(const std::string &comm_id, uint16_t addr, const std::vector<uint16_t> &values)
+void CommManager::writeMultipleRegisters(const std::string &comm_name, uint16_t addr, const std::vector<uint16_t> &values)
 {
-    auto it = comms_.find(comm_id);
+    auto it = comms_.find(comm_name);
     if (it == comms_.end() || !it->second->isConnected())
     {
-        SPDLOG_WARN("Comm {} not connected for register write", comm_id);
+        SPDLOG_WARN("Comm {} not connected for register write", comm_name);
         return;
     }
     it->second->writeMultipleRegisters(addr, values);
@@ -152,9 +151,9 @@ std::array<bool, 8> CommManager::doState() const
     return do_state_;
 }
 
-bool CommManager::isCommConnected(const std::string &id) const
+bool CommManager::isCommConnected(const std::string &name) const
 {
-    auto it = comms_.find(id);
+    auto it = comms_.find(name);
     return it != comms_.end() && it->second->isConnected();
 }
 
@@ -192,28 +191,27 @@ void CommManager::slot_refreshIO()
 void CommManager::slot_checkConnection()
 {
     // Modbus：每次都汇报实际连接状态，断线时尝试重连
-    for (auto &[id, comm] : comms_)
+    for (auto &[name, comm] : comms_)
     {
         bool connected = comm->isConnected();
-        emit sign_commStatusChanged(id, connected);
+        emit sign_commStatusChanged(name, connected);
 
         if (!connected)
         {
-            auto cfg_it = comm_configs_.find(id);
+            auto cfg_it = comm_configs_.find(name);
             if (cfg_it == comm_configs_.end())
                 continue;
 
-            SPDLOG_WARN("Comm {} disconnected, attempting reconnect...", id);
+            SPDLOG_WARN("Comm {} disconnected, attempting reconnect...", name);
 
-            // 先断开旧连接，再重连（connectDevice 是异步的，下次定时器再检查状态）
             comm->disconnectDevice();
             if (comm->connectDevice(cfg_it->second))
             {
-                SPDLOG_INFO("Comm {} reconnect initiated", id);
+                SPDLOG_INFO("Comm {} reconnect initiated", name);
             }
             else
             {
-                SPDLOG_WARN("Comm {} reconnect failed, will retry in 3s", id);
+                SPDLOG_WARN("Comm {} reconnect failed, will retry in 3s", name);
             }
         }
     }

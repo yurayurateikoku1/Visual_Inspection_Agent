@@ -25,16 +25,16 @@ public:
     // IO 状态
     std::array<bool, 8> diState() const;
     std::array<bool, 8> doState() const;
-    bool isCommConnected(const std::string &id) const;
+    bool isCommConnected(const std::string &name) const;
 
     /// @brief 添加通信
     void addComm(const CommunicationParam &config);
     /// @brief 断开所有
     void disconnectAll();
     /// @brief 写单个线圈
-    void writeSingleCoil(const std::string &comm_id, uint16_t addr, bool value);
+    void writeSingleCoil(const std::string &comm_name, uint16_t addr, bool value);
     /// @brief 写多个寄存器
-    void writeMultipleRegisters(const std::string &comm_id, uint16_t addr, const std::vector<uint16_t> &values);
+    void writeMultipleRegisters(const std::string &comm_name, uint16_t addr, const std::vector<uint16_t> &values);
     /// @brief 打开光源串口
     void openLightSerial(const std::string &port, int baud_rate);
     /// @brief 设置光源亮度
@@ -42,7 +42,7 @@ public:
 
 signals:
     void sign_ioStateUpdated();
-    void sign_commStatusChanged(const std::string &id, bool connected);
+    void sign_commStatusChanged(const std::string &name, bool connected);
     void sign_lightStatusChanged(bool connected);
 
 private slots:

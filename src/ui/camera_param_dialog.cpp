@@ -22,7 +22,7 @@ void CameraParamDialog::on_pushButton_setCameraParam_clicked()
     // auto image_rotaAngle = ui->doubleSpinBox_imageRotaAngle->value();
 
     auto &mgr = CameraManager::getInstance();
-    auto ids = mgr.cameraIds();
+    auto ids = mgr.cameraNames();
     if (ids.empty())
         return;
     auto *cam = mgr.getCamera(ids.front());
@@ -35,7 +35,7 @@ void CameraParamDialog::on_pushButton_setCameraParam_clicked()
 void CameraParamDialog::on_pushButton_getCameraParam_clicked()
 {
     auto &mgr = CameraManager::getInstance();
-    auto ids = mgr.cameraIds();
+    auto ids = mgr.cameraNames();
     if (ids.empty())
         return;
     auto *cam = mgr.getCamera(ids.front());

@@ -29,14 +29,14 @@ public:
     bool isRunning() const { return running_; }
 
     /// @brief 手动触发指定工作流
-    void triggerOnce(const std::string &workflow_id);
+    void triggerOnce(const std::string &workflow_name);
 
 signals:
     /// @brief 采集完成，发送原图到 UI 显示
-    void sign_frameCaptured(const std::string &camera_id, const HalconCpp::HObject &image);
+    void sign_frameCaptured(const std::string &camera_name, const HalconCpp::HObject &image);
 
     /// @brief 检测完成，发送叠加结果的显示图 + 检测结果
-    void sign_inspectionFinished(const std::string &workflow_id, const std::string &camera_id,
+    void sign_inspectionFinished(const std::string &workflow_name, const std::string &camera_name,
                                  const HalconCpp::HObject &display_image, const InspectionResult &result);
 
     /// @brief 运行状态变化
@@ -51,7 +51,7 @@ private:
     ~WorkflowManager();
 
     /// @brief 执行一次检测流程
-    void executeWorkflow(const std::string &workflow_id);
+    void executeWorkflow(const std::string &workflow_name);
 
     struct PipelineState
     {

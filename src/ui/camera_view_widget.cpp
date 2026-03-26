@@ -1,14 +1,15 @@
 #include "camera_view_widget.h"
 #include "ui_camera_view_widget.h"
 #include <QResizeEvent>
+#include <QTimer>
 #include <spdlog/spdlog.h>
 
-CameraViewWidget::CameraViewWidget(const std::string &camera_id, QWidget *parent)
-    : QWidget(parent), ui(new Ui::CameraViewWidget), camera_id_(camera_id)
+CameraViewWidget::CameraViewWidget(const std::string &camera_name, QWidget *parent)
+    : QWidget(parent), ui(new Ui::CameraViewWidget), camera_name_(camera_name)
 {
     ui->setupUi(this);
 
-    ui->label_cameraId->setText(QString::fromStdString(camera_id));
+    ui->label_cameraId->setText(QString::fromStdString(camera_name));
     ui->label_status->setText(QStringLiteral("离线"));
     ui->pushButton_scaleWindow->setIcon(QIcon(":/assets/fangdachuangkou2x.png"));
 
@@ -32,8 +33,10 @@ void CameraViewWidget::initHalconWindow()
     if (hwindow_)
         return;
 
-    int w = ui->widget_window->width();
-    int h = ui->widget_window->height();
+    // 使用物理像素尺寸（高DPI屏幕下逻辑像素 ≠ 物理像素）
+    qreal dpr = ui->widget_window->devicePixelRatioF();
+    int w = static_cast<int>(ui->widget_window->width() * dpr);
+    int h = static_cast<int>(ui->widget_window->height() * dpr);
     if (w <= 0 || h <= 0)
         return;
 
@@ -43,6 +46,8 @@ void CameraViewWidget::initHalconWindow()
             0, 0, w - 1, h - 1,
             static_cast<Hlong>(ui->widget_window->winId()),
             "visible", "");
+        hwindow_w_ = ui->widget_window->width();
+        hwindow_h_ = ui->widget_window->height();
     }
     catch (HalconCpp::HException &e)
     {
@@ -52,6 +57,15 @@ void CameraViewWidget::initHalconWindow()
 
 void CameraViewWidget::displayImage(const HalconCpp::HObject &image)
 {
+    int w = ui->widget_window->width();
+    int h = ui->widget_window->height();
+
+    // 窗口尺寸变化时重建 HWindow
+    if (hwindow_ && (w != hwindow_w_ || h != hwindow_h_))
+    {
+        hwindow_.reset();
+    }
+
     if (!hwindow_)
         initHalconWindow();
     if (!hwindow_)
@@ -99,5 +113,5 @@ void CameraViewWidget::onScaleWindowClicked()
 {
     maximized_ = !maximized_;
     ui->pushButton_scaleWindow->setIcon(maximized_ ? QIcon(":/assets/fangdachuangkou2x.png") : QIcon(":/assets/suoxiaochuangkou2x.png"));
-    emit maximizeRequested(camera_id_);
+    emit maximizeRequested(camera_name_);
 }

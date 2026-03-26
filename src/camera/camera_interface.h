@@ -9,8 +9,8 @@ class ICameraCallback
 {
 public:
     virtual ~ICameraCallback() = default;
-    virtual void onFrameReceived(const std::string &camera_id, const HalconCpp::HObject &frame) = 0;
-    virtual void onCameraError(const std::string &camera_id, int error_code, const std::string &msg) = 0;
+    virtual void frameReceived(const std::string &camera_name, const HalconCpp::HObject &frame) = 0;
+    virtual void cameraErrorReceived(const std::string &camera_name, int error_code, const std::string &msg) = 0;
 };
 
 /// @brief 相机接口

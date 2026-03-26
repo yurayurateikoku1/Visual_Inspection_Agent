@@ -8,7 +8,7 @@
 
 struct NodeContext
 {
-    std::string camera_id;
+    std::string camera_name;
     HalconCpp::HObject image;         // 原图（保持不变，用于存储）
     HalconCpp::HObject display_image; // 叠加检测结果的显示图（用于 UI）
     InspectionResult result;

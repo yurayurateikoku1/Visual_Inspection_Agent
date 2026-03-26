@@ -15,7 +15,7 @@ void ImageStorage::setBaseDir(const std::string &dir)
     base_dir_ = dir;
 }
 
-std::string ImageStorage::saveImage(const std::string &camera_id, const HalconCpp::HObject &image, bool is_ng)
+std::string ImageStorage::saveImage(const std::string &camera_name, const HalconCpp::HObject &image, bool is_ng)
 {
     namespace fs = std::filesystem;
     using namespace std::chrono;
@@ -26,13 +26,13 @@ std::string ImageStorage::saveImage(const std::string &camera_id, const HalconCp
 
     std::string sub = is_ng ? "NG" : "OK";
     std::string dir = std::format("{}/{}/{:04d}{:02d}{:02d}",
-                                  base_dir_, camera_id,
+                                  base_dir_, camera_name,
                                   int(ymd.year()), unsigned(ymd.month()), unsigned(ymd.day()));
 
     fs::create_directories(dir + "/" + sub);
 
     auto ts = duration_cast<milliseconds>(now.time_since_epoch()).count();
-    std::string filename = std::format("{}/{}/{}_{}.bmp", dir, sub, camera_id, ts);
+    std::string filename = std::format("{}/{}/{}_{}.bmp", dir, sub, camera_name, ts);
 
     try
     {

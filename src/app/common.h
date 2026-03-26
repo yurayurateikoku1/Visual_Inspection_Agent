@@ -10,27 +10,16 @@
 
 using json = nlohmann::json;
 
-/// @brief 缺陷区域（替代 cv::Rect，纯数据结构）
-struct DefectRect
-{
-    int x = 0;
-    int y = 0;
-    int width = 0;
-    int height = 0;
-};
-
 struct InspectionResult
 {
     bool pass = true;
     std::string detail;
-    std::vector<DefectRect> defect_regions;
     double confidence = 0.0;
     int64_t timestamp_ms = 0;
 };
 
 struct CameraParam
 {
-    std::string id;
     std::string name;
     std::string ip;
     float exposure_time = 10000.0f;
@@ -89,10 +78,9 @@ struct LightParam
 ///        参照 C# MainTask 状态机：DI触发 → 软触发拍照 → 算法检测 → DO输出结果
 struct WorkflowParam
 {
-    std::string id;        // 工作流ID，如 "wf_1"
-    std::string name;      // 名称，如 "剥皮检测"
-    std::string camera_id; // 绑定的相机ID
-    std::string comm_id;   // 绑定的通信通道ID
+    std::string name;        // 名称，如 "剥皮检测"
+    std::string camera_name; // 绑定的相机名称
+    std::string comm_name;   // 绑定的通信通道名称
 
     // DI 触发配置
     uint16_t trigger_di_addr = 0; // 触发信号的 DI 线圈地址（如 DI0=0, DI1=1）
@@ -112,7 +100,6 @@ struct WorkflowParam
 
 struct CommunicationParam
 {
-    std::string id;
     std::string name;
     CommProtocol protocol = CommProtocol::ModbusTCP;
 

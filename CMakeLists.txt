@@ -82,8 +82,11 @@ set(PROJECT_SOURCES
     src/algorithm/algorithm_factory.h    src/algorithm/algorithm_factory.cpp
 
     # ai_infer
-    # src/ai_infer/ai_engine.h  src/ai_infer/ai_engine.cpp
-
+    # src/ai_infer/ai_utils.h  src/ai_infer/ai_common.h     src/ai_infer/infer_backend.h
+    # src/ai_infer/preprocess.h src/ai_infer/preprocess.cpp
+    # src/ai_infer/postprocess.h src/ai_infer/postprocess.cpp
+    # src/ai_infer/yolo.h src/ai_infer/yolo.cpp
+    # src/ai_infer/openvino_infer.h src/ai_infer/openvino_infer.cpp
 
 
     # storage
@@ -142,7 +145,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_CURRENT_SOURCE_DIR}/data"
-            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/data"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
     COMMENT "Copy config.json to exe dir"
 )
 

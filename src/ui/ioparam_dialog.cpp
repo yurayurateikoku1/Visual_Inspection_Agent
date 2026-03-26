@@ -84,8 +84,7 @@ void IOParamDialog::saveParam()
     if (cfgs.empty())
     {
         cfgs.push_back(CommunicationParam{});
-        cfgs[0].id = "plc_1";
-        cfgs[0].name = "PLC";
+        cfgs[0].name = "plc_1";
     }
     auto &cfg = cfgs[0];
     cfg.serial_port = "COM" + std::to_string(ui->spinBox_comPort->value());

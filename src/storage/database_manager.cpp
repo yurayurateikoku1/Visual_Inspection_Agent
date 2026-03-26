@@ -36,7 +36,7 @@ void DatabaseManager::createTables()
     q.exec(R"(
         CREATE TABLE IF NOT EXISTS inspection_results (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            camera_id   TEXT NOT NULL,
+            camera_name   TEXT NOT NULL,
             pass        INTEGER NOT NULL,
             detail      TEXT,
             confidence  REAL,
@@ -45,18 +45,18 @@ void DatabaseManager::createTables()
         )
     )");
     q.exec("CREATE INDEX IF NOT EXISTS idx_timestamp ON inspection_results(timestamp_ms)");
-    q.exec("CREATE INDEX IF NOT EXISTS idx_camera ON inspection_results(camera_id)");
+    q.exec("CREATE INDEX IF NOT EXISTS idx_camera ON inspection_results(camera_name)");
 }
 
-bool DatabaseManager::saveResult(const std::string &camera_id, const InspectionResult &result)
+bool DatabaseManager::saveResult(const std::string &camera_name, const InspectionResult &result)
 {
     std::lock_guard lock(mutex_);
     QSqlQuery q(db_);
     q.prepare(R"(
-        INSERT INTO inspection_results (camera_id, pass, detail, confidence, timestamp_ms)
+        INSERT INTO inspection_results (camera_name, pass, detail, confidence, timestamp_ms)
         VALUES (:cam, :pass, :detail, :conf, :ts)
     )");
-    q.bindValue(":cam", QString::fromStdString(camera_id));
+    q.bindValue(":cam", QString::fromStdString(camera_name));
     q.bindValue(":pass", result.pass ? 1 : 0);
     q.bindValue(":detail", QString::fromStdString(result.detail));
     q.bindValue(":conf", result.confidence);

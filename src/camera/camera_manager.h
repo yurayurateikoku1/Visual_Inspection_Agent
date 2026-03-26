@@ -25,19 +25,19 @@ public:
     /// @brief 添加相机（直接传入设备信息，免二次枚举）
     bool addCamera(const CameraParam &config, MV_CC_DEVICE_INFO *dev_info);
 
-    void removeCamera(const std::string &id);
-    ICamera *getCamera(const std::string &id);
-    std::vector<std::string> cameraIds() const;
+    void removeCamera(const std::string &name);
+    ICamera *getCamera(const std::string &name);
+    std::vector<std::string> cameraNames() const;
 
     void openAll();
     void closeAll();
 
     /// @brief 将相机标记为离线并启动重连定时器
-    void markOffline(const std::string &camera_id);
+    void markOffline(const std::string &camera_name);
 
 signals:
     /// @brief 相机状态变化 (online=true 上线, online=false 离线)
-    void sign_cameraStatusChanged(const std::string &camera_id, bool online);
+    void sign_cameraStatusChanged(const std::string &camera_name, bool online);
 
 private slots:
 
@@ -47,8 +47,8 @@ private slots:
 private:
     CameraManager();
 
-    std::map<std::string, std::unique_ptr<ICamera>> cameras_; // 相机实例
-    std::set<std::string> offline_cameras_;                   // 离线相机string id
+    std::map<std::string, std::unique_ptr<ICamera>> cameras_; // name → 相机实例
+    std::set<std::string> offline_cameras_;                   // 离线相机 name
     mutable std::mutex mutex_;
     QTimer *reconnect_timer_ = nullptr; // 重连定时器
 

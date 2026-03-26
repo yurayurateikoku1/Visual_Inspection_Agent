@@ -23,7 +23,7 @@ class ModbusClientBase : public QObject
 {
     Q_OBJECT
 public:
-    explicit ModbusClientBase(const std::string &id, QObject *parent = nullptr);
+    explicit ModbusClientBase(const std::string &name, QObject *parent = nullptr);
     virtual ~ModbusClientBase();
 
     /// @brief 连接设备（子类实现 TCP/RTU 具体连接逻辑）
@@ -52,7 +52,7 @@ public:
     /// @brief 写检测结果到线圈（pass=true 写 OK 地址，false 写 NG 地址）
     void sendResult(uint16_t addr, bool pass, WriteCallback cb = nullptr);
 
-    std::string getId() const { return id_; }
+    std::string getName() const { return id_; }
 
     /// @brief 设置 Modbus 从站地址（默认 1）
     void setServerAddress(int address) { server_address_ = address; }
@@ -61,7 +61,7 @@ public:
 
 protected:
     QModbusClient *client_ = nullptr; // 子类提供具体的 QModbusClient 实例（TCP 或 RTU）
-    std::string id_;                  // 通信通道标识，如 "plc_1"
+    std::string id_;                  // 通信通道名称
     int server_address_ = 1;          // Modbus 从站地址
     int timeout_ms_ = 1000;           // 请求超时（ms）
 

@@ -16,7 +16,7 @@ void InspectionPipeline::build()
     process_nodes_.clear();
 
     // 采集节点（单独管理，不放入 DAG）
-    capture_node_ = std::make_unique<CaptureNode>(param_.camera_id);
+    capture_node_ = std::make_unique<CaptureNode>(param_.camera_name);
 
     // 算法节点
     for (auto &algo_id : param_.algorithm_ids)
@@ -33,7 +33,7 @@ void InspectionPipeline::build()
     }
 
     // 结果节点
-    process_nodes_.push_back(std::make_unique<ResultNode>(param_.comm_id));
+    process_nodes_.push_back(std::make_unique<ResultNode>(param_.comm_name));
 
     // 构建 Taskflow DAG：算法1 -> 算法2 -> ... -> 结果
     tf::Task prev;
@@ -61,7 +61,7 @@ void InspectionPipeline::build()
 bool InspectionPipeline::capture()
 {
     ctx_ = NodeContext{};
-    ctx_.camera_id = param_.camera_id;
+    ctx_.camera_name = param_.camera_name;
     ctx_.result.pass = true;
 
     if (!capture_node_ || !capture_node_->execute(ctx_))

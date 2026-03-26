@@ -34,7 +34,7 @@ bool HikCamera::open(const CameraParam &config)
 {
     if (opened_)
     {
-        SPDLOG_WARN("Camera {} already opened", config.id);
+        SPDLOG_WARN("Camera {} already opened", config.name);
         return true;
     }
 
@@ -43,7 +43,7 @@ bool HikCamera::open(const CameraParam &config)
     int ret = MV_CC_EnumDevices(MV_GIGE_DEVICE | MV_USB_DEVICE, &device_list);
     if (ret != MV_OK || device_list.nDeviceNum == 0)
     {
-        SPDLOG_ERROR("No devices found for camera {}", config.id);
+        SPDLOG_ERROR("No devices found for camera {}", config.name);
         return false;
     }
 
@@ -72,7 +72,7 @@ bool HikCamera::open(const CameraParam &config)
 
     if (!target)
     {
-        SPDLOG_ERROR("Camera {} with IP {} not found", config.id, config.ip);
+        SPDLOG_ERROR("Camera {} with IP {} not found", config.name, config.ip);
         return false;
     }
 
@@ -83,10 +83,10 @@ bool HikCamera::open(const CameraParam &config, MV_CC_DEVICE_INFO *dev_info)
 {
     if (opened_)
     {
-        SPDLOG_WARN("Camera {} already opened", config.id);
+        SPDLOG_WARN("Camera {} already opened", config.name);
         return true;
     }
-    config_ = config;
+    camera_param_ = config;
 
     int ret = MV_CC_CreateHandle(&handle_, dev_info);
     if (ret != MV_OK)
@@ -112,7 +112,7 @@ bool HikCamera::open(const CameraParam &config, MV_CC_DEVICE_INFO *dev_info)
     setTriggerMode(config.trigger_mode);
 
     opened_ = true;
-    SPDLOG_INFO("Camera {} opened (name: {})", config.id, config.name);
+    SPDLOG_INFO("Camera {} opened", config.name);
     return true;
 }
 
@@ -403,28 +403,39 @@ void __stdcall HikCamera::imageCallback(unsigned char *p_data,
     if (!self->opened_ || !self->callback_ || !p_data || !p_frameinfo)
         return;
 
-    HalconCpp::HObject frame;
+    try
     {
-        std::lock_guard lock(self->handle_mutex_);
-        if (!self->handle_)
-            return;
-        frame = self->convertToHobject(p_data, p_frameinfo);
+        HalconCpp::HObject frame;
+        {
+            std::lock_guard lock(self->handle_mutex_);
+            if (!self->handle_)
+                return;
+            frame = self->convertToHobject(p_data, p_frameinfo);
+        }
+        if (frame.IsInitialized())
+        {
+            self->callback_->frameReceived(self->camera_param_.name, frame);
+        }
     }
-    if (frame.IsInitialized())
+    catch (HalconCpp::HException &e)
     {
-        self->callback_->onFrameReceived(self->config_.id, frame);
+        SPDLOG_ERROR("imageCallback HException: {}", e.ErrorMessage().Text());
+    }
+    catch (std::exception &e)
+    {
+        SPDLOG_ERROR("imageCallback exception: {}", e.what());
     }
 }
 
 void __stdcall HikCamera::exceptionCallback(unsigned int msg_type, void *p_user)
 {
     auto *self = static_cast<HikCamera *>(p_user);
-    SPDLOG_ERROR("Camera {} exception: 0x{:08X}", self->config_.id, msg_type);
+    SPDLOG_ERROR("Camera {} exception: 0x{:08X}", self->camera_param_.name, msg_type);
     // 不在 SDK 回调线程中直接操作 handle_ 或修改状态，
     // 仅通知上层（MainWindow::onCameraError 会投递到主线程调 markOffline）
     if (self->callback_)
     {
-        self->callback_->onCameraError(self->config_.id, static_cast<int>(msg_type), "device exception/disconnected");
+        self->callback_->cameraErrorReceived(self->camera_param_.name, static_cast<int>(msg_type), "device exception/disconnected");
     }
 }
 
@@ -445,7 +456,7 @@ bool HikCamera::isAlive() const
                      (gige.nCurrentIp >> 16) & 0xFF,
                      (gige.nCurrentIp >> 8) & 0xFF,
                      gige.nCurrentIp & 0xFF);
-            if (config_.ip == ip)
+            if (camera_param_.ip == ip)
                 return true;
         }
     }
@@ -454,7 +465,7 @@ bool HikCamera::isAlive() const
 
 bool HikCamera::reconnect()
 {
-    SPDLOG_INFO("Camera {} attempting reconnect...", config_.id);
+    SPDLOG_INFO("Camera {} attempting reconnect...", camera_param_.name);
 
     // 1. 强制清理旧连接（无论状态标记如何，确保 SDK 资源释放）
     forceClose();
@@ -473,7 +484,7 @@ bool HikCamera::reconnect()
                      (gige.nCurrentIp >> 16) & 0xFF,
                      (gige.nCurrentIp >> 8) & 0xFF,
                      gige.nCurrentIp & 0xFF);
-            if (config_.ip == ip)
+            if (camera_param_.ip == ip)
             {
                 target = &dev;
                 break;
@@ -483,12 +494,12 @@ bool HikCamera::reconnect()
 
     if (!target)
     {
-        SPDLOG_WARN("Camera {} (IP: {}) not found during reconnect", config_.id, config_.ip);
+        SPDLOG_WARN("Camera {} (IP: {}) not found during reconnect", camera_param_.name, camera_param_.ip);
         return false;
     }
 
     // 3. 重新打开
-    if (!open(config_, target))
+    if (!open(camera_param_, target))
         return false;
 
     // 4. 重新开始采集
@@ -498,7 +509,7 @@ bool HikCamera::reconnect()
         return false;
     }
 
-    SPDLOG_INFO("Camera {} reconnected successfully", config_.id);
+    SPDLOG_INFO("Camera {} reconnected successfully", camera_param_.name);
     return true;
 }
 
@@ -506,19 +517,68 @@ HalconCpp::HObject HikCamera::convertToHobject(unsigned char *p_data, MV_FRAME_O
 {
     int width = p_frameinfo->nWidth;
     int height = p_frameinfo->nHeight;
+    auto pixel_type = p_frameinfo->enPixelType;
     HalconCpp::HObject image;
 
-    if (p_frameinfo->enPixelType == PixelType_Gvsp_Mono8)
+    // Mono8：直接生成单通道图像
+    if (pixel_type == PixelType_Gvsp_Mono8)
     {
         HalconCpp::GenImage1(&image, "byte", width, height, reinterpret_cast<Hlong>(p_data));
         return image;
     }
 
-    // 其他格式先用 SDK 转为 RGB8
+    // Bayer 格式：先生成单通道原始图，再用 Halcon CfaToRgb 转彩色
+    if (pixel_type == PixelType_Gvsp_BayerRG8 ||
+        pixel_type == PixelType_Gvsp_BayerGB8 ||
+        pixel_type == PixelType_Gvsp_BayerGR8 ||
+        pixel_type == PixelType_Gvsp_BayerBG8)
+    {
+        try
+        {
+            HalconCpp::HObject bayer_image;
+            HalconCpp::GenImage1(&bayer_image, "byte", width, height, reinterpret_cast<Hlong>(p_data));
+
+            // Halcon Bayer 模式字符串
+            const char *cfa = "bayer_rg"; // 默认
+            if (pixel_type == PixelType_Gvsp_BayerGB8)
+                cfa = "bayer_gb";
+            else if (pixel_type == PixelType_Gvsp_BayerGR8)
+                cfa = "bayer_gr";
+            else if (pixel_type == PixelType_Gvsp_BayerBG8)
+                cfa = "bayer_bg";
+
+            HalconCpp::CfaToRgb(bayer_image, &image, cfa, "bilinear");
+            return image;
+        }
+        catch (HalconCpp::HException &e)
+        {
+            SPDLOG_ERROR("CfaToRgb failed: {}", e.ErrorMessage().Text());
+            return {};
+        }
+    }
+
+    // RGB8Packed：直接拆分 R/G/B 平面
+    if (pixel_type == PixelType_Gvsp_RGB8_Packed)
+    {
+        std::vector<unsigned char> r(width * height), g(width * height), b(width * height);
+        for (int i = 0; i < width * height; ++i)
+        {
+            r[i] = p_data[i * 3];
+            g[i] = p_data[i * 3 + 1];
+            b[i] = p_data[i * 3 + 2];
+        }
+        HalconCpp::GenImage3(&image, "byte", width, height,
+                             reinterpret_cast<Hlong>(r.data()),
+                             reinterpret_cast<Hlong>(g.data()),
+                             reinterpret_cast<Hlong>(b.data()));
+        return image;
+    }
+
+    // 其他格式：尝试 SDK 转 RGB8
     MV_CC_PIXEL_CONVERT_PARAM param{};
     param.nWidth = width;
     param.nHeight = height;
-    param.enSrcPixelType = p_frameinfo->enPixelType;
+    param.enSrcPixelType = pixel_type;
     param.pSrcData = p_data;
     param.nSrcDataLen = p_frameinfo->nFrameLen;
     param.enDstPixelType = PixelType_Gvsp_RGB8_Packed;
@@ -530,11 +590,11 @@ HalconCpp::HObject HikCamera::convertToHobject(unsigned char *p_data, MV_FRAME_O
     int ret = MV_CC_ConvertPixelType(handle_, &param);
     if (ret != MV_OK)
     {
-        spdlog::error("ConvertPixelType(RGB) failed: 0x{:08X}", ret);
+        SPDLOG_ERROR("ConvertPixelType failed: pixelType=0x{:08X}, ret=0x{:08X}",
+                     static_cast<unsigned int>(pixel_type), ret);
         return {};
     }
 
-    // 拆分 RGB 交织数据为 R/G/B 三个平面
     std::vector<unsigned char> r(width * height), g(width * height), b(width * height);
     for (int i = 0; i < width * height; ++i)
     {

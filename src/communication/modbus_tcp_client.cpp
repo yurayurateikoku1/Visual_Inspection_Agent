@@ -2,8 +2,8 @@
 #include <QVariant>
 #include <spdlog/spdlog.h>
 
-ModbusTcpClient::ModbusTcpClient(const std::string &id, QObject *parent)
-    : ModbusClientBase(id, parent)
+ModbusTcpClient::ModbusTcpClient(const std::string &name, QObject *parent)
+    : ModbusClientBase(name, parent)
 {
     client_ = new QModbusTcpClient(this);
     client_->setTimeout(timeout_ms_);
