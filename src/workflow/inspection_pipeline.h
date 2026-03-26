@@ -5,32 +5,34 @@
 #include <taskflow/taskflow.hpp>
 #include <vector>
 #include <memory>
-#include <atomic>
 
 class InspectionPipeline
 {
 public:
-    explicit InspectionPipeline(const WorkflowConfig &config);
+    explicit InspectionPipeline(const WorkflowParam &param);
     ~InspectionPipeline();
 
+    /// @brief 根据 WorkflowParam 构建节点链
     void build();
-    void runOnce();
-    void startLoop();
-    void stop();
-    bool isRunning() const { return running_; }
 
-    const WorkflowConfig &config() const { return config_; }
-    const NodeContext &lastContext() const { return ctx_; }
+    /// @brief 阶段1: 采集图像（同步）
+    ///        成功后 ctx_ 中有 image + display_image
+    bool capture();
 
-    // 动态添加算法节点
-    void addAlgorithmNode(std::shared_ptr<IAlgorithm> algo);
+    /// @brief 阶段2: 执行算法链 + 结果节点（同步）
+    ///        在 display_image 上叠加检测框
+    InspectionResult process(tf::Executor &executor);
+
+    /// @brief 当前上下文（采集后可访问 image，检测后可访问 display_image）
+    const NodeContext &context() const { return ctx_; }
+
+    const WorkflowParam &param() const { return param_; }
 
 private:
-    WorkflowConfig config_;
-    tf::Executor executor_;
+    WorkflowParam param_;
     tf::Taskflow taskflow_;
     NodeContext ctx_;
-    std::atomic<bool> running_{false};
 
-    std::vector<std::unique_ptr<INode>> nodes_;
+    std::unique_ptr<INode> capture_node_;                // 采集节点（单独执行）
+    std::vector<std::unique_ptr<INode>> process_nodes_;  // 算法节点 + 结果节点（DAG执行）
 };

@@ -3,13 +3,14 @@
 #include <string>
 #include <any>
 #include <map>
-#include <opencv2/core.hpp>
+#include <halconcpp/HalconCpp.h>
 #include "app/common.h"
 
 struct NodeContext
 {
     std::string camera_id;
-    cv::Mat image;
+    HalconCpp::HObject image;         // 原图（保持不变，用于存储）
+    HalconCpp::HObject display_image; // 叠加检测结果的显示图（用于 UI）
     InspectionResult result;
     std::map<std::string, std::any> data;
 };

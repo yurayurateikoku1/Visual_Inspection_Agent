@@ -8,5 +8,11 @@
         <file>assets/user.png</file>
         <file>assets/tupian.png</file>
         <file>src/style/style.qss</file>
+        <file>assets/zhuangtaideng0.png</file>
+        <file>assets/zhuangtaideng1.png</file>
+        <file>assets/xiangjicanshu.png</file>
+        <file>assets/yingjianguanli.png</file>
+        <file>assets/fangdachuangkou2x.png</file>
+        <file>assets/suoxiaochuangkou2x.png</file>
     </qresource>
 </RCC>

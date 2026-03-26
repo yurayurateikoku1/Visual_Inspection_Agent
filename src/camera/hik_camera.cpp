@@ -30,7 +30,7 @@ std::vector<MV_CC_DEVICE_INFO> HikCamera::enumDevices()
     return result;
 }
 
-bool HikCamera::open(const CameraConfig &config)
+bool HikCamera::open(const CameraParam &config)
 {
     if (opened_)
     {
@@ -79,7 +79,7 @@ bool HikCamera::open(const CameraConfig &config)
     return open(config, target);
 }
 
-bool HikCamera::open(const CameraConfig &config, MV_CC_DEVICE_INFO *dev_info)
+bool HikCamera::open(const CameraParam &config, MV_CC_DEVICE_INFO *dev_info)
 {
     if (opened_)
     {
@@ -104,6 +104,9 @@ bool HikCamera::open(const CameraConfig &config, MV_CC_DEVICE_INFO *dev_info)
         return false;
     }
 
+    // 注册异常回调（掉线检测）
+    MV_CC_RegisterExceptionCallBack(handle_, exceptionCallback, this);
+
     setExposureTime(config.exposure_time);
     setGain(config.gain);
     setTriggerMode(config.trigger_mode);
@@ -115,15 +118,49 @@ bool HikCamera::open(const CameraConfig &config, MV_CC_DEVICE_INFO *dev_info)
 
 void HikCamera::close()
 {
-    if (grabbing_)
-        stopGrabbing();
+    void *h = handle_;
+    if (!h)
+        return;
+
+    // 1. 标记关闭 — imageCallback 检查后直接 return，不再持锁
+    opened_ = false;
+    grabbing_ = false;
+
+    // 2. 停止抓取（SDK 内部会等待回调退出）
+    MV_CC_StopGrabbing(h);
+
+    // 3. 回调已全部退出，安全释放资源
+    std::lock_guard lock(handle_mutex_);
     if (handle_)
     {
         MV_CC_CloseDevice(handle_);
         MV_CC_DestroyHandle(handle_);
         handle_ = nullptr;
     }
+}
+
+void HikCamera::forceClose()
+{
+    void *h = handle_;
+    if (!h)
+    {
+        opened_ = false;
+        grabbing_ = false;
+        return;
+    }
+
     opened_ = false;
+    grabbing_ = false;
+
+    MV_CC_StopGrabbing(h);
+
+    std::lock_guard lock(handle_mutex_);
+    if (handle_)
+    {
+        MV_CC_CloseDevice(handle_);
+        MV_CC_DestroyHandle(handle_);
+        handle_ = nullptr;
+    }
 }
 
 bool HikCamera::isOpened() const { return opened_; }
@@ -131,6 +168,10 @@ bool HikCamera::isOpened() const { return opened_; }
 bool HikCamera::startGrabbing()
 {
     if (!opened_ || grabbing_)
+        return false;
+
+    std::lock_guard lock(handle_mutex_);
+    if (!handle_)
         return false;
 
     int ret = MV_CC_RegisterImageCallBackEx(handle_, imageCallback, this);
@@ -152,19 +193,21 @@ bool HikCamera::startGrabbing()
 
 void HikCamera::stopGrabbing()
 {
-    if (!grabbing_)
+    if (!grabbing_ || !handle_)
         return;
-    MV_CC_StopGrabbing(handle_);
     grabbing_ = false;
+    MV_CC_StopGrabbing(handle_);
 }
 
 bool HikCamera::isGrabbing() const { return grabbing_; }
 
-bool HikCamera::grabOne(cv::Mat &frame, int timeout_ms)
+bool HikCamera::grabOne(HalconCpp::HObject &frame, int timeout_ms)
 {
     if (!opened_)
         return false;
-    std::lock_guard lock(grab_mutex_);
+    std::lock_guard lock(handle_mutex_);
+    if (!handle_)
+        return false;
 
     MV_FRAME_OUT frame_out{};
     int ret = MV_CC_GetImageBuffer(handle_, &frame_out, timeout_ms);
@@ -174,13 +217,14 @@ bool HikCamera::grabOne(cv::Mat &frame, int timeout_ms)
         return false;
     }
 
-    frame = convertToMat(frame_out.pBufAddr, &frame_out.stFrameInfo);
+    frame = convertToHobject(frame_out.pBufAddr, &frame_out.stFrameInfo);
     MV_CC_FreeImageBuffer(handle_, &frame_out);
-    return !frame.empty();
+    return frame.IsInitialized();
 }
 
 bool HikCamera::setExposureTime(float us)
 {
+    std::lock_guard lock(handle_mutex_);
     if (!handle_)
         return false;
     MV_CC_SetEnumValue(handle_, "ExposureAuto", 0);
@@ -190,6 +234,7 @@ bool HikCamera::setExposureTime(float us)
 
 bool HikCamera::getExposureTime(float &us)
 {
+    std::lock_guard lock(handle_mutex_);
     if (!handle_)
         return false;
     MVCC_FLOATVALUE val{};
@@ -202,6 +247,7 @@ bool HikCamera::getExposureTime(float &us)
 
 bool HikCamera::setGain(float gain)
 {
+    std::lock_guard lock(handle_mutex_);
     if (!handle_)
         return false;
     MV_CC_SetEnumValue(handle_, "GainAuto", 0);
@@ -211,6 +257,7 @@ bool HikCamera::setGain(float gain)
 
 bool HikCamera::getGain(float &gain)
 {
+    std::lock_guard lock(handle_mutex_);
     if (!handle_)
         return false;
     MVCC_FLOATVALUE val{};
@@ -223,6 +270,7 @@ bool HikCamera::getGain(float &gain)
 
 bool HikCamera::setTriggerMode(int mode)
 {
+    std::lock_guard lock(handle_mutex_);
     if (!handle_)
         return false;
     if (mode == 0)
@@ -240,6 +288,7 @@ bool HikCamera::setTriggerMode(int mode)
 
 bool HikCamera::getTriggerMode(int &mode)
 {
+    std::lock_guard lock(handle_mutex_);
     if (!handle_)
         return false;
     MVCC_ENUMVALUE val{};
@@ -261,6 +310,7 @@ bool HikCamera::getTriggerMode(int &mode)
 
 bool HikCamera::setFrameRate(float fps)
 {
+    std::lock_guard lock(handle_mutex_);
     if (!handle_)
         return false;
     MV_CC_SetBoolValue(handle_, "AcquisitionFrameRateEnable", true);
@@ -270,6 +320,7 @@ bool HikCamera::setFrameRate(float fps)
 
 bool HikCamera::getFrameRate(float &fps)
 {
+    std::lock_guard lock(handle_mutex_);
     if (!handle_)
         return false;
     MVCC_FLOATVALUE val{};
@@ -282,9 +333,7 @@ bool HikCamera::getFrameRate(float &fps)
 
 bool HikCamera::setPixelFormat(const std::string &format)
 {
-    if (!handle_)
-        return false;
-    // 映射常用像素格式字符串到海康枚举值
+    // 格式映射不需要锁
     static const std::unordered_map<std::string, unsigned int> fmt_map = {
         {"Mono8", PixelType_Gvsp_Mono8},
         {"Mono10", PixelType_Gvsp_Mono10},
@@ -302,12 +351,16 @@ bool HikCamera::setPixelFormat(const std::string &format)
         SPDLOG_ERROR("Unknown pixel format: {}", format);
         return false;
     }
+    std::lock_guard lock(handle_mutex_);
+    if (!handle_)
+        return false;
     int ret = MV_CC_SetEnumValue(handle_, "PixelFormat", it->second);
     return ret == MV_OK;
 }
 
 bool HikCamera::getPixelFormat(std::string &format)
 {
+    std::lock_guard lock(handle_mutex_);
     if (!handle_)
         return false;
     MVCC_ENUMVALUE val{};
@@ -336,6 +389,7 @@ bool HikCamera::getPixelFormat(std::string &format)
 
 bool HikCamera::softTrigger()
 {
+    std::lock_guard lock(handle_mutex_);
     if (!handle_)
         return false;
     return MV_CC_SetCommandValue(handle_, "TriggerSoftware") == MV_OK;
@@ -346,44 +400,152 @@ void __stdcall HikCamera::imageCallback(unsigned char *p_data,
                                         void *p_user)
 {
     auto *self = static_cast<HikCamera *>(p_user);
-    if (self->callback_ && p_data && p_frameinfo)
+    if (!self->opened_ || !self->callback_ || !p_data || !p_frameinfo)
+        return;
+
+    HalconCpp::HObject frame;
     {
-        cv::Mat frame = self->convertToMat(p_data, p_frameinfo);
-        if (!frame.empty())
-        {
-            self->callback_->onFrameReceived(self->config_.id, frame);
-        }
+        std::lock_guard lock(self->handle_mutex_);
+        if (!self->handle_)
+            return;
+        frame = self->convertToHobject(p_data, p_frameinfo);
+    }
+    if (frame.IsInitialized())
+    {
+        self->callback_->onFrameReceived(self->config_.id, frame);
     }
 }
 
-cv::Mat HikCamera::convertToMat(unsigned char *p_data, MV_FRAME_OUT_INFO_EX *p_frameinfo)
+void __stdcall HikCamera::exceptionCallback(unsigned int msg_type, void *p_user)
+{
+    auto *self = static_cast<HikCamera *>(p_user);
+    SPDLOG_ERROR("Camera {} exception: 0x{:08X}", self->config_.id, msg_type);
+    // 不在 SDK 回调线程中直接操作 handle_ 或修改状态，
+    // 仅通知上层（MainWindow::onCameraError 会投递到主线程调 markOffline）
+    if (self->callback_)
+    {
+        self->callback_->onCameraError(self->config_.id, static_cast<int>(msg_type), "device exception/disconnected");
+    }
+}
+
+bool HikCamera::isAlive() const
+{
+    if (!handle_ || !opened_)
+        return false;
+    // 通过枚举设备检查本相机 IP 是否仍在线（读参数可能返回缓存值，不可靠）
+    auto devices = enumDevices();
+    for (auto &dev : devices)
+    {
+        if (dev.nTLayerType == MV_GIGE_DEVICE)
+        {
+            auto &gige = dev.SpecialInfo.stGigEInfo;
+            char ip[32];
+            snprintf(ip, sizeof(ip), "%d.%d.%d.%d",
+                     (gige.nCurrentIp >> 24) & 0xFF,
+                     (gige.nCurrentIp >> 16) & 0xFF,
+                     (gige.nCurrentIp >> 8) & 0xFF,
+                     gige.nCurrentIp & 0xFF);
+            if (config_.ip == ip)
+                return true;
+        }
+    }
+    return false;
+}
+
+bool HikCamera::reconnect()
+{
+    SPDLOG_INFO("Camera {} attempting reconnect...", config_.id);
+
+    // 1. 强制清理旧连接（无论状态标记如何，确保 SDK 资源释放）
+    forceClose();
+
+    // 2. 重新枚举，查找匹配 IP 的设备
+    auto devices = enumDevices();
+    MV_CC_DEVICE_INFO *target = nullptr;
+    for (auto &dev : devices)
+    {
+        if (dev.nTLayerType == MV_GIGE_DEVICE)
+        {
+            auto &gige = dev.SpecialInfo.stGigEInfo;
+            char ip[32];
+            snprintf(ip, sizeof(ip), "%d.%d.%d.%d",
+                     (gige.nCurrentIp >> 24) & 0xFF,
+                     (gige.nCurrentIp >> 16) & 0xFF,
+                     (gige.nCurrentIp >> 8) & 0xFF,
+                     gige.nCurrentIp & 0xFF);
+            if (config_.ip == ip)
+            {
+                target = &dev;
+                break;
+            }
+        }
+    }
+
+    if (!target)
+    {
+        SPDLOG_WARN("Camera {} (IP: {}) not found during reconnect", config_.id, config_.ip);
+        return false;
+    }
+
+    // 3. 重新打开
+    if (!open(config_, target))
+        return false;
+
+    // 4. 重新开始采集
+    if (!startGrabbing())
+    {
+        close();
+        return false;
+    }
+
+    SPDLOG_INFO("Camera {} reconnected successfully", config_.id);
+    return true;
+}
+
+HalconCpp::HObject HikCamera::convertToHobject(unsigned char *p_data, MV_FRAME_OUT_INFO_EX *p_frameinfo)
 {
     int width = p_frameinfo->nWidth;
     int height = p_frameinfo->nHeight;
+    HalconCpp::HObject image;
 
     if (p_frameinfo->enPixelType == PixelType_Gvsp_Mono8)
     {
-        return cv::Mat(height, width, CV_8UC1, p_data).clone();
+        HalconCpp::GenImage1(&image, "byte", width, height, reinterpret_cast<Hlong>(p_data));
+        return image;
     }
 
-    // 其他格式转为 BGR
+    // 其他格式先用 SDK 转为 RGB8
     MV_CC_PIXEL_CONVERT_PARAM param{};
     param.nWidth = width;
     param.nHeight = height;
     param.enSrcPixelType = p_frameinfo->enPixelType;
     param.pSrcData = p_data;
     param.nSrcDataLen = p_frameinfo->nFrameLen;
-    param.enDstPixelType = PixelType_Gvsp_BGR8_Packed;
+    param.enDstPixelType = PixelType_Gvsp_RGB8_Packed;
 
-    cv::Mat bgr(height, width, CV_8UC3);
-    param.pDstBuffer = bgr.data;
-    param.nDstBufferSize = bgr.total() * bgr.elemSize();
+    std::vector<unsigned char> rgb_buf(width * height * 3);
+    param.pDstBuffer = rgb_buf.data();
+    param.nDstBufferSize = static_cast<unsigned int>(rgb_buf.size());
 
     int ret = MV_CC_ConvertPixelType(handle_, &param);
     if (ret != MV_OK)
     {
-        spdlog::error("ConvertPixelType failed: 0x{:08X}", ret);
+        spdlog::error("ConvertPixelType(RGB) failed: 0x{:08X}", ret);
         return {};
     }
-    return bgr;
+
+    // 拆分 RGB 交织数据为 R/G/B 三个平面
+    std::vector<unsigned char> r(width * height), g(width * height), b(width * height);
+    for (int i = 0; i < width * height; ++i)
+    {
+        r[i] = rgb_buf[i * 3];
+        g[i] = rgb_buf[i * 3 + 1];
+        b[i] = rgb_buf[i * 3 + 2];
+    }
+
+    HalconCpp::GenImage3(&image, "byte", width, height,
+                         reinterpret_cast<Hlong>(r.data()),
+                         reinterpret_cast<Hlong>(g.data()),
+                         reinterpret_cast<Hlong>(b.data()));
+    return image;
 }

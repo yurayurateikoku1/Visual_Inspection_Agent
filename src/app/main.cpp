@@ -1,4 +1,6 @@
 #include "../ui/main_window.h"
+#include "config_manager.h"
+#include "../communication/comm_manager.h"
 #include <QApplication>
 #include <QFile>
 #include <spdlog/spdlog.h>
@@ -17,6 +19,9 @@ int main(int argc, char *argv[])
         app.setStyleSheet(styleSheet);
         file.close();
     }
+    auto &config = ConfigManager::getInstance();
+    auto &comm = CommManager::getInstance();
+
     MainWindow w;
     w.show();
     return app.exec();

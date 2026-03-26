@@ -2,14 +2,14 @@
 
 #include <string>
 #include <functional>
-#include <opencv2/core.hpp>
+#include <halconcpp/HalconCpp.h>
 #include "../app/common.h"
 
 class ICameraCallback
 {
 public:
     virtual ~ICameraCallback() = default;
-    virtual void onFrameReceived(const std::string &camera_id, const cv::Mat &frame) = 0;
+    virtual void onFrameReceived(const std::string &camera_id, const HalconCpp::HObject &frame) = 0;
     virtual void onCameraError(const std::string &camera_id, int error_code, const std::string &msg) = 0;
 };
 
@@ -22,7 +22,7 @@ public:
     /// @brief 打开相机
     /// @param config
     /// @return
-    virtual bool open(const CameraConfig &config) = 0;
+    virtual bool open(const CameraParam &config) = 0;
 
     /// @brief 关闭相机
     virtual void close() = 0;
@@ -46,7 +46,7 @@ public:
     /// @param frame
     /// @param timeout_ms
     /// @return
-    virtual bool grabOne(cv::Mat &frame, int timeout_ms = 3000) = 0;
+    virtual bool grabOne(HalconCpp::HObject &frame, int timeout_ms = 3000) = 0;
 
     /// @brief 设置曝光
     /// @param us
@@ -102,8 +102,8 @@ public:
     /// @return
     virtual bool softTrigger() = 0;
 
-    virtual std::string id() const = 0;
-    virtual std::string name() const = 0;
+    virtual std::string getId() const = 0;
+    virtual std::string getName() const = 0;
 
     /// @brief 设置回调
     /// @param cb

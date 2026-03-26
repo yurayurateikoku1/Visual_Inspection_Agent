@@ -1,75 +1,103 @@
 #include "camera_view_widget.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <opencv2/imgproc.hpp>
+#include "ui_camera_view_widget.h"
+#include <QResizeEvent>
+#include <spdlog/spdlog.h>
 
 CameraViewWidget::CameraViewWidget(const std::string &camera_id, QWidget *parent)
-    : QWidget(parent), camera_id_(camera_id)
+    : QWidget(parent), ui(new Ui::CameraViewWidget), camera_id_(camera_id)
 {
-    auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(2, 2, 2, 2);
+    ui->setupUi(this);
 
-    // 顶部栏：状态标签 + 放大按钮
-    auto *top_bar = new QHBoxLayout;
-    status_label_ = new QLabel(QString::fromStdString(camera_id));
-    status_label_->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-    status_label_->setFixedHeight(24);
+    ui->label_cameraId->setText(QString::fromStdString(camera_id));
+    ui->label_status->setText(QStringLiteral("离线"));
+    ui->pushButton_scaleWindow->setIcon(QIcon(":/assets/fangdachuangkou2x.png"));
 
-    maximize_btn_ = new QPushButton(u8"\u2922"); // ⤢ 放大符号
-    maximize_btn_->setFixedSize(24, 24);
-    maximize_btn_->setToolTip(u8"放大/还原");
+    // Halcon 渲染画布
+    ui->widget_window->setMinimumSize(320, 240);
+    ui->widget_window->setStyleSheet("background-color: #1e1e1e;");
+    ui->widget_window->setAttribute(Qt::WA_NativeWindow);
 
-    top_bar->addWidget(status_label_, 1);
-    top_bar->addWidget(maximize_btn_);
-    layout->addLayout(top_bar);
-
-    // 图像显示
-    image_label_ = new QLabel;
-    image_label_->setAlignment(Qt::AlignCenter);
-    image_label_->setMinimumSize(320, 240);
-    image_label_->setStyleSheet("background-color: #1e1e1e;");
-    layout->addWidget(image_label_, 1);
-
-    connect(this, &CameraViewWidget::frameUpdated,
-            this, &CameraViewWidget::onFrameUpdated, Qt::QueuedConnection);
-    connect(maximize_btn_, &QPushButton::clicked,
-            this, &CameraViewWidget::onMaximizeBtnClicked);
+    connect(ui->pushButton_scaleWindow, &QPushButton::clicked,
+            this, &CameraViewWidget::onScaleWindowClicked);
 }
 
-void CameraViewWidget::updateFrame(const cv::Mat &frame)
+CameraViewWidget::~CameraViewWidget()
 {
-    if (frame.empty())
+    hwindow_.reset();
+    delete ui;
+}
+
+void CameraViewWidget::initHalconWindow()
+{
+    if (hwindow_)
         return;
 
-    cv::Mat rgb;
-    if (frame.channels() == 1)
-    {
-        cv::cvtColor(frame, rgb, cv::COLOR_GRAY2RGB);
-    }
-    else
-    {
-        cv::cvtColor(frame, rgb, cv::COLOR_BGR2RGB);
-    }
+    int w = ui->widget_window->width();
+    int h = ui->widget_window->height();
+    if (w <= 0 || h <= 0)
+        return;
 
-    QImage qimg(rgb.data, rgb.cols, rgb.rows, static_cast<int>(rgb.step),
-                QImage::Format_RGB888);
-    emit frameUpdated(qimg.copy());
+    try
+    {
+        hwindow_ = std::make_unique<HalconCpp::HWindow>(
+            0, 0, w - 1, h - 1,
+            static_cast<Hlong>(ui->widget_window->winId()),
+            "visible", "");
+    }
+    catch (HalconCpp::HException &e)
+    {
+        SPDLOG_ERROR("HWindow create failed: {}", e.ErrorMessage().Text());
+    }
+}
+
+void CameraViewWidget::displayImage(const HalconCpp::HObject &image)
+{
+    if (!hwindow_)
+        initHalconWindow();
+    if (!hwindow_)
+        return;
+
+    try
+    {
+        HalconCpp::HTuple img_w, img_h;
+        HalconCpp::GetImageSize(image, &img_w, &img_h);
+        hwindow_->SetPart(0, 0, img_h.I() - 1, img_w.I() - 1);
+        hwindow_->DispObj(image);
+    }
+    catch (HalconCpp::HException &e)
+    {
+        SPDLOG_ERROR("DispObj failed: {}", e.ErrorMessage().Text());
+    }
+}
+
+void CameraViewWidget::updateFrame(const HalconCpp::HObject &image)
+{
+    current_image_ = image;
+    displayImage(current_image_);
 }
 
 void CameraViewWidget::setStatus(const QString &status)
 {
-    status_label_->setText(status);
+    ui->label_status->setText(status);
 }
 
-void CameraViewWidget::onFrameUpdated(const QImage &image)
+void CameraViewWidget::resizeEvent(QResizeEvent *event)
 {
-    image_label_->setPixmap(QPixmap::fromImage(image).scaled(
-        image_label_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    QWidget::resizeEvent(event);
+
+    if (hwindow_)
+    {
+        hwindow_.reset();
+        initHalconWindow();
+
+        if (current_image_.IsInitialized())
+            displayImage(current_image_);
+    }
 }
 
-void CameraViewWidget::onMaximizeBtnClicked()
+void CameraViewWidget::onScaleWindowClicked()
 {
     maximized_ = !maximized_;
-    maximize_btn_->setText(maximized_ ? u8"\u2923" : u8"\u2922"); // ⤣ 还原 / ⤢ 放大
+    ui->pushButton_scaleWindow->setIcon(maximized_ ? QIcon(":/assets/fangdachuangkou2x.png") : QIcon(":/assets/suoxiaochuangkou2x.png"));
     emit maximizeRequested(camera_id_);
 }

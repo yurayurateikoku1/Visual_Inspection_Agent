@@ -1,6 +1,5 @@
 #include "image_storage.h"
 #include <spdlog/spdlog.h>
-#include <opencv2/imgcodecs.hpp>
 #include <filesystem>
 #include <chrono>
 #include <format>
@@ -16,7 +15,7 @@ void ImageStorage::setBaseDir(const std::string &dir)
     base_dir_ = dir;
 }
 
-std::string ImageStorage::saveImage(const std::string &camera_id, const cv::Mat &image, bool is_ng)
+std::string ImageStorage::saveImage(const std::string &camera_id, const HalconCpp::HObject &image, bool is_ng)
 {
     namespace fs = std::filesystem;
     using namespace std::chrono;
@@ -35,7 +34,14 @@ std::string ImageStorage::saveImage(const std::string &camera_id, const cv::Mat 
     auto ts = duration_cast<milliseconds>(now.time_since_epoch()).count();
     std::string filename = std::format("{}/{}/{}_{}.bmp", dir, sub, camera_id, ts);
 
-    cv::imwrite(filename, image);
+    try
+    {
+        HalconCpp::WriteImage(image, "bmp", 0, filename.c_str());
+    }
+    catch (HalconCpp::HException &e)
+    {
+        spdlog::error("ImageStorage: WriteImage failed: {}", e.ErrorMessage().Text());
+    }
     return filename;
 }
 

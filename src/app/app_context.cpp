@@ -1,7 +1,55 @@
 #include "app_context.h"
 
-AppContext &AppContext::instance()
+AppContext &AppContext::getInstance()
 {
     static AppContext inst;
     return inst;
+}
+
+AppContext::AppContext()
+    : executor_(8)
+{
+    // ── 默认相机参数 ──
+    CameraParam cam1;
+    cam1.id = "cam_1";
+    cam1.name = "ccd1";
+    cam1.ip = "192.168.1.101";
+    cam1.exposure_time = 10000.0f;
+    cam1.gain = 0.0f;
+    cam1.trigger_mode = 1; // 软触发
+    cam1.rotation_deg = 0;
+    camera_params_.push_back(cam1);
+
+    // ── 默认通信参数 ──
+    CommunicationParam comm1;
+    comm1.id = "plc_1";
+    comm1.name = "主PLC";
+    comm1.protocol = CommProtocol::ModbusTCP;
+    comm1.ip = "192.168.1.200";
+    comm1.port = 502;
+    comm1.slave_address = 1;
+    comm_params_.push_back(comm1);
+
+    // ── 默认光源参数 ──
+    light_param_.serial_port = "COM1";
+    light_param_.baud_rate = 38400;
+    light_param_.use_modbus = false;
+    light_param_.luminance[0] = 0;
+    light_param_.luminance[1] = 0;
+    light_param_.luminance[2] = 0;
+    light_param_.luminance[3] = 0;
+
+    // ── 默认工作流参数 ──
+    WorkflowParam wf1;
+    wf1.id = "wf_1";
+    wf1.name = "正面检测";
+    wf1.camera_id = "cam_1";
+    wf1.comm_id = "plc_1";
+    wf1.trigger_di_addr = 0;
+    wf1.trigger_delay_ms = 0;
+    wf1.do_ok_addr = 500;
+    wf1.do_ng_addr = 501;
+    wf1.result_hold_ms = 100;
+    wf1.exposure_time = -1.0f;
+    workflow_params_.push_back(wf1);
 }

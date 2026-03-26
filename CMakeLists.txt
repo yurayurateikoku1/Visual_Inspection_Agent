@@ -37,43 +37,54 @@ set(MVS_SDK_DIR "D:/MVS/Development")
 set(MVS_INCLUDE_DIR "${MVS_SDK_DIR}/Includes")
 set(MVS_LIB_DIR    "${MVS_SDK_DIR}/Libraries/win64")
 
+# ── HACLON SDK ──────────────────────────────────────────────
+set(HACLON_SDK_DIR "D:/C++Library/haclon-25.11SDK")
+set(HACLON_INCLUDE_DIR "${HACLON_SDK_DIR}/include")
+set(HACLON_LIB_DIR    "${HACLON_SDK_DIR}/lib/x64-win64")
+
 # ── Source files ─────────────────────────────────────────────
 set(PROJECT_SOURCES
     # app
     src/app/main.cpp
-    src/app/app_context.h src/app/app_context.cpp
     src/app/config_manager.h src/app/config_manager.cpp
+    src/app/app_context.h    src/app/app_context.cpp
     src/app/common.h
     resource.qrc
 
     # ui
     src/ui/main_window.h  src/ui/main_window.cpp  src/ui/main_window.ui
-    src/ui/param_page.h   src/ui/param_page.cpp   src/ui/param_page.ui
-    src/ui/camera_view_widget.h src/ui/camera_view_widget.cpp
+    src/ui/ioparam_dialog.h   src/ui/ioparam_dialog.cpp   src/ui/ioparam_dialog.ui
+    src/ui/camera_view_widget.h src/ui/camera_view_widget.cpp src/ui/camera_view_widget.ui
+    src/ui/camera_param_dialog.h src/ui/camera_param_dialog.cpp src/ui/camera_param_dialog.ui
 
     # camera
     src/camera/camera_interface.h
     src/camera/hik_camera.h       src/camera/hik_camera.cpp
     src/camera/camera_manager.h   src/camera/camera_manager.cpp
 
+    # communication
+    src/communication/modbus_client_base.h  src/communication/modbus_client_base.cpp
+    src/communication/modbus_tcp_client.h   src/communication/modbus_tcp_client.cpp
+    src/communication/modbus_rtu_client.h   src/communication/modbus_rtu_client.cpp
+    src/communication/comm_manager.h        src/communication/comm_manager.cpp
+    src/communication/light_serial_controller.h src/communication/light_serial_controller.cpp
+
     # workflow
-    # src/workflow/inspection_pipeline.h  src/workflow/inspection_pipeline.cpp
-    # src/workflow/nodes/node_base.h
-    # src/workflow/nodes/capture_node.h   src/workflow/nodes/capture_node.cpp
-    # src/workflow/nodes/algorithm_node.h src/workflow/nodes/algorithm_node.cpp
-    # src/workflow/nodes/result_node.h    src/workflow/nodes/result_node.cpp
+    src/workflow/workflow_manager.h      src/workflow/workflow_manager.cpp
+    src/workflow/inspection_pipeline.h   src/workflow/inspection_pipeline.cpp
+    src/workflow/nodes/node_base.h
+    src/workflow/nodes/capture_node.h    src/workflow/nodes/capture_node.cpp
+    src/workflow/nodes/algorithm_node.h  src/workflow/nodes/algorithm_node.cpp
+    src/workflow/nodes/result_node.h     src/workflow/nodes/result_node.cpp
 
     # algorithm
-    # src/algorithm/algorithm_interface.h
-    # src/algorithm/algorithm_factory.h   src/algorithm/algorithm_factory.cpp
+    src/algorithm/algorithm_interface.h
+    src/algorithm/algorithm_factory.h    src/algorithm/algorithm_factory.cpp
 
     # ai_infer
     # src/ai_infer/ai_engine.h  src/ai_infer/ai_engine.cpp
 
-    # communication
-    # src/communication/comm_interface.h
-    # src/communication/modbus_tcp_client.h  src/communication/modbus_tcp_client.cpp
-    # src/communication/comm_manager.h       src/communication/comm_manager.cpp
+
 
     # storage
     # src/storage/database_manager.h  src/storage/database_manager.cpp
@@ -98,6 +109,8 @@ if(MSVC)
 endif()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
     _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
     _CRT_SECURE_NO_WARNINGS
     OPENCV_DISABLE_DEBUG_BUILD_GUARD
@@ -106,6 +119,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${MVS_INCLUDE_DIR}
+    ${HACLON_INCLUDE_DIR}
     D:/C++Library/taskflow-4.0.0
 )
 
@@ -121,13 +135,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     nlohmann_json::nlohmann_json
     ${OpenCV_LIBS}
     ${MVS_LIB_DIR}/MvCameraControl.lib
+    ${HACLON_LIB_DIR}/halconcpp.lib
 )
 
-    # ── Copy config.json to exe dir ──
+    # ── Copy data to exe dir ──
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/config.json"
-            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/config.json"
+            "${CMAKE_CURRENT_SOURCE_DIR}/data"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/data"
     COMMENT "Copy config.json to exe dir"
 )
 
@@ -147,6 +162,28 @@ if(WIN32)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     ${_opencv_dlls} $<TARGET_FILE_DIR:${PROJECT_NAME}>
             COMMENT "Copy OpenCV DLLs"
+        )
+    endif()
+
+    # ── Halcon DLLs ──
+    set(_halcon_bin_dir "${HACLON_SDK_DIR}/dll")
+    file(GLOB _halcon_dlls "${_halcon_bin_dir}/halcon*.dll")
+    if(_halcon_dlls)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${_halcon_dlls} $<TARGET_FILE_DIR:${PROJECT_NAME}>
+            COMMENT "Copy Halcon DLLs"
+        )
+    endif()
+
+    # ── HIK MVS DLLs ──
+    set(_mvs_bin_dir "C:/Program Files (x86)/Common Files/MVS/Runtime/Win64_x64")
+    file(GLOB _mvs_dlls "${_mvs_bin_dir}/*.dll")
+    if(_mvs_dlls)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${_mvs_dlls} $<TARGET_FILE_DIR:${PROJECT_NAME}>
+            COMMENT "Copy HIK MVS DLLs"
         )
     endif()
 

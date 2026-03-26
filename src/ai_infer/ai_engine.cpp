@@ -38,7 +38,7 @@ void AiEngine::unloadModel() {
     loaded_ = false;
 }
 
-bool AiEngine::infer(const cv::Mat& image, std::vector<AiDetection>& detections,
+bool AiEngine::infer(const HalconCpp::HObject& image, std::vector<AiDetection>& detections,
                       float conf_threshold) {
     if (!loaded_ || !impl_) {
         spdlog::error("AiEngine: model not loaded");
@@ -46,12 +46,12 @@ bool AiEngine::infer(const cv::Mat& image, std::vector<AiDetection>& detections,
     }
 
     // TODO: 实际推理逻辑
-    // 1. 预处理 image -> input tensor
+    // 1. 预处理 HObject image -> input tensor
     // 2. infer_request.infer()
     // 3. 后处理 output -> detections
 
     detections.clear();
-    spdlog::debug("AiEngine: infer (stub) on {}x{}", image.cols, image.rows);
+    spdlog::debug("AiEngine: infer (stub)");
     return true;
 }
 

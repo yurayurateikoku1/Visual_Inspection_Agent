@@ -4,38 +4,27 @@
 #include "nodes/result_node.h"
 #include "algorithm/algorithm_factory.h"
 #include <spdlog/spdlog.h>
-#include <thread>
 
-InspectionPipeline::InspectionPipeline(const WorkflowConfig &config)
-    : config_(config), executor_(1) {}
+InspectionPipeline::InspectionPipeline(const WorkflowParam &param)
+    : param_(param) {}
 
-InspectionPipeline::~InspectionPipeline()
-{
-    stop();
-}
-
-void InspectionPipeline::addAlgorithmNode(std::shared_ptr<IAlgorithm> algo)
-{
-    config_.algorithm_ids.push_back(algo->name());
-    nodes_.push_back(std::make_unique<AlgorithmNode>(std::move(algo)));
-}
+InspectionPipeline::~InspectionPipeline() = default;
 
 void InspectionPipeline::build()
 {
     taskflow_.clear();
-    nodes_.clear();
+    process_nodes_.clear();
 
-    // 1. 采集节点
-    auto capture = std::make_unique<CaptureNode>(config_.camera_id);
-    nodes_.push_back(std::move(capture));
+    // 采集节点（单独管理，不放入 DAG）
+    capture_node_ = std::make_unique<CaptureNode>(param_.camera_id);
 
-    // 2. 算法节点
-    for (auto &algo_id : config_.algorithm_ids)
+    // 算法节点
+    for (auto &algo_id : param_.algorithm_ids)
     {
         auto algo = AlgorithmFactory::instance().create(algo_id);
         if (algo)
         {
-            nodes_.push_back(std::make_unique<AlgorithmNode>(std::move(algo)));
+            process_nodes_.push_back(std::make_unique<AlgorithmNode>(std::move(algo)));
         }
         else
         {
@@ -43,14 +32,14 @@ void InspectionPipeline::build()
         }
     }
 
-    // 3. 结果节点
-    nodes_.push_back(std::make_unique<ResultNode>(config_.comm_id));
+    // 结果节点
+    process_nodes_.push_back(std::make_unique<ResultNode>(param_.comm_id));
 
-    // 构建 Taskflow DAG：采集 -> 算法1 -> 算法2 -> ... -> 结果
+    // 构建 Taskflow DAG：算法1 -> 算法2 -> ... -> 结果
     tf::Task prev;
-    for (size_t i = 0; i < nodes_.size(); ++i)
+    for (size_t i = 0; i < process_nodes_.size(); ++i)
     {
-        auto *node = nodes_[i].get();
+        auto *node = process_nodes_[i].get();
         auto task = taskflow_.emplace([node, this]()
                                       {
             if (!node->execute(ctx_)) {
@@ -65,34 +54,26 @@ void InspectionPipeline::build()
         prev = task;
     }
 
-    spdlog::info("Pipeline {} built with {} nodes", config_.name, nodes_.size());
+    spdlog::info("Pipeline {} built: 1 capture + {} process nodes",
+                 param_.name, process_nodes_.size());
 }
 
-void InspectionPipeline::runOnce()
+bool InspectionPipeline::capture()
 {
     ctx_ = NodeContext{};
+    ctx_.camera_id = param_.camera_id;
     ctx_.result.pass = true;
-    executor_.run(taskflow_).wait();
+
+    if (!capture_node_ || !capture_node_->execute(ctx_))
+    {
+        spdlog::error("Pipeline {}: capture failed", param_.name);
+        return false;
+    }
+    return true;
 }
 
-void InspectionPipeline::startLoop()
+InspectionResult InspectionPipeline::process(tf::Executor &executor)
 {
-    if (running_)
-        return;
-    running_ = true;
-
-    std::thread([this]()
-                {
-        spdlog::info("Pipeline {} loop started", config_.name);
-        while (running_) {
-            runOnce();
-        }
-        spdlog::info("Pipeline {} loop stopped", config_.name); })
-        .detach();
-}
-
-void InspectionPipeline::stop()
-{
-    running_ = false;
-    executor_.wait_for_all();
+    executor.run(taskflow_).wait();
+    return ctx_.result;
 }

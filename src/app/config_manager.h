@@ -1,31 +1,22 @@
 #pragma once
 
-#include "common.h"
 #include <nlohmann/json.hpp>
 #include <string>
-#include <vector>
 
-/// @brief 配置管理器：负责 JSON 配置文件的加载/保存
+/// @brief 配置管理器：纯文件 I/O，负责 JSON 配置的加载/保存
+///        加载时将数据填充到 AppContext，保存时从 AppContext 读取
 class ConfigManager
 {
 public:
-    static ConfigManager &instance();
+    static ConfigManager &getInstance();
+    ~ConfigManager();
 
-    bool loadConfig(const std::string &path = "config.json");
-    bool saveConfig(const std::string &path = "config.json");
+    /// @brief 从 JSON 文件加载配置到 AppContext
+    bool loadConfig(const std::string &path = "data/config.json");
 
-    std::vector<CameraConfig> &cameraConfigs() { return camera_configs_; }
-    std::vector<CommConfig> &commConfigs() { return comm_configs_; }
-    std::vector<WorkflowConfig> &workflowConfigs() { return workflow_configs_; }
-
-    const std::vector<CameraConfig> &cameraConfigs() const { return camera_configs_; }
-    const std::vector<CommConfig> &commConfigs() const { return comm_configs_; }
-    const std::vector<WorkflowConfig> &workflowConfigs() const { return workflow_configs_; }
+    /// @brief 从 AppContext 读取配置保存到 JSON 文件
+    bool saveConfig(const std::string &path = "data/config.json");
 
 private:
-    ConfigManager() = default;
-
-    std::vector<CameraConfig> camera_configs_;
-    std::vector<CommConfig> comm_configs_;
-    std::vector<WorkflowConfig> workflow_configs_;
+    ConfigManager();
 };

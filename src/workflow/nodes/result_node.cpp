@@ -1,6 +1,4 @@
 #include "result_node.h"
-#include "communication/comm_manager.h"
-#include "storage/database_manager.h"
 #include <spdlog/spdlog.h>
 #include <chrono>
 
@@ -14,22 +12,10 @@ bool ResultNode::execute(NodeContext &ctx)
                                   now.time_since_epoch())
                                   .count();
 
-    // 发送结果到 PLC
-    if (!comm_id_.empty())
-    {
-        auto *comm = CommManager::instance().getComm(comm_id_);
-        if (comm && comm->isConnected())
-        {
-            comm->sendResult(result_addr_, ctx.result.pass);
-        }
-        else
-        {
-            spdlog::warn("ResultNode: comm {} not available", comm_id_);
-        }
-    }
+    // DO 输出由 WorkflowManager 统一处理，这里只做日志和存储
 
-    // 保存到数据库
-    DatabaseManager::instance().saveResult(ctx.camera_id, ctx.result);
+    // TODO: 保存到数据库（DatabaseManager 未实现）
+    // DatabaseManager::instance().saveResult(ctx.camera_id, ctx.result);
 
     spdlog::info("ResultNode: camera={} pass={} detail={}", ctx.camera_id, ctx.result.pass, ctx.result.detail);
     return true;

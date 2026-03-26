@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <opencv2/core.hpp>
+#include <halconcpp/HalconCpp.h>
 
 class ImageStorage
 {
@@ -10,7 +10,7 @@ public:
 
     void setBaseDir(const std::string &dir);
 
-    std::string saveImage(const std::string &camera_id, const cv::Mat &image,
+    std::string saveImage(const std::string &camera_id, const HalconCpp::HObject &image,
                           bool is_ng = false);
 
     void cleanOldImages(int keep_days = 30);

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1281</width>
-    <height>1024</height>
+    <width>800</width>
+    <height>600</height>
    </rect>
   </property>
   <property name="font">
@@ -21,6 +21,21 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout" stretch="7,3">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
     <item>
      <widget class="QWidget" name="widget_region_camera" native="true">
       <property name="styleSheet">
@@ -39,7 +54,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1281</width>
+     <width>800</width>
      <height>33</height>
     </rect>
    </property>
@@ -99,6 +114,7 @@ background-color: rgb(233, 238, 246);</string>
      <string>参数设定</string>
     </property>
     <addaction name="action_parameter"/>
+    <addaction name="action_camera"/>
    </widget>
    <widget class="QMenu" name="menu_user">
     <property name="minimumSize">
@@ -142,8 +158,31 @@ background-color: rgb(233, 238, 246);</string>
    <addaction name="menu_user"/>
   </widget>
   <action name="action_parameter">
+   <property name="icon">
+    <iconset resource="../../resource.qrc">
+     <normaloff>:/assets/yingjianguanli.png</normaloff>:/assets/yingjianguanli.png</iconset>
+   </property>
    <property name="text">
-    <string>参数</string>
+    <string>IO参数</string>
+   </property>
+   <property name="font">
+    <font>
+     <bold>true</bold>
+    </font>
+   </property>
+  </action>
+  <action name="action_camera">
+   <property name="icon">
+    <iconset resource="../../resource.qrc">
+     <normaloff>:/assets/xiangjicanshu.png</normaloff>:/assets/xiangjicanshu.png</iconset>
+   </property>
+   <property name="text">
+    <string>Camera参数</string>
+   </property>
+   <property name="font">
+    <font>
+     <bold>true</bold>
+    </font>
    </property>
   </action>
  </widget>

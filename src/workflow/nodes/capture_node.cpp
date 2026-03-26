@@ -20,6 +20,9 @@ bool CaptureNode::execute(NodeContext &ctx)
         return false;
     }
 
-    spdlog::debug("CaptureNode: captured {}x{} from {}", ctx.image.cols, ctx.image.rows, camera_id_);
+    // 复制一份用于叠加检测结果显示
+    ctx.display_image = ctx.image;
+
+    spdlog::debug("CaptureNode: captured from {}", camera_id_);
     return true;
 }

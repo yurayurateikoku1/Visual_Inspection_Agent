@@ -1,9 +1,10 @@
 #pragma once
 
 #include <string>
-#include <opencv2/core.hpp>
+#include <halconcpp/HalconCpp.h>
 #include <memory>
 #include <vector>
+#include "app/common.h"
 
 namespace via {
 
@@ -11,7 +12,7 @@ struct AiDetection {
     int class_id = -1;
     std::string label;
     float confidence = 0.0f;
-    cv::Rect bbox;
+    DefectRect bbox;
 };
 
 class AiEngine {
@@ -22,7 +23,7 @@ public:
     void unloadModel();
     bool isLoaded() const { return loaded_; }
 
-    bool infer(const cv::Mat& image, std::vector<AiDetection>& detections,
+    bool infer(const HalconCpp::HObject& image, std::vector<AiDetection>& detections,
                float conf_threshold = 0.5f);
 
 private:

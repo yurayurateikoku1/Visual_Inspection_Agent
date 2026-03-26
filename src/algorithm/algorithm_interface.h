@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include <opencv2/core.hpp>
+#include <halconcpp/HalconCpp.h>
 #include "app/common.h"
 #include <nlohmann/json.hpp>
 
@@ -14,7 +14,7 @@ public:
     virtual std::string description() const = 0;
 
     virtual bool init(const nlohmann::json &params) = 0;
-    virtual bool process(const cv::Mat &input, InspectionResult &result) = 0;
+    virtual bool process(const HalconCpp::HObject &input, InspectionResult &result) = 0;
 
     virtual nlohmann::json defaultParams() const = 0;
 };
