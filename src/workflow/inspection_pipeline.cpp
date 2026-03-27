@@ -58,12 +58,31 @@ void InspectionPipeline::build()
                  param_.name, process_nodes_.size());
 }
 
+void InspectionPipeline::setOfflineImage(const HalconCpp::HObject &image)
+{
+    offline_image_ = image;
+}
+
+void InspectionPipeline::clearOfflineImage()
+{
+    offline_image_.Clear();
+}
+
 bool InspectionPipeline::capture()
 {
     ctx_ = NodeContext{};
     ctx_.camera_name = param_.camera_name;
     ctx_.result.pass = true;
 
+    // 离线模式：直接使用注入的图像
+    if (offline_image_.IsInitialized())
+    {
+        ctx_.image = offline_image_;
+        ctx_.display_image = offline_image_;
+        return true;
+    }
+
+    // 在线模式：从相机采集
     if (!capture_node_ || !capture_node_->execute(ctx_))
     {
         spdlog::error("Pipeline {}: capture failed", param_.name);

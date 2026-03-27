@@ -15,7 +15,17 @@ public:
     /// @brief 根据 WorkflowParam 构建节点链
     void build();
 
+    /// @brief 设置离线图像，下次 capture() 将使用此图像而非相机采集
+    void setOfflineImage(const HalconCpp::HObject &image);
+
+    /// @brief 清除离线图像，恢复相机采集模式
+    void clearOfflineImage();
+
+    /// @brief 是否处于离线模式
+    bool isOffline() const { return offline_image_.IsInitialized(); }
+
     /// @brief 阶段1: 采集图像（同步）
+    ///        若有离线图像则直接使用，否则从相机采集
     ///        成功后 ctx_ 中有 image + display_image
     bool capture();
 
@@ -35,4 +45,5 @@ private:
 
     std::unique_ptr<INode> capture_node_;                // 采集节点（单独执行）
     std::vector<std::unique_ptr<INode>> process_nodes_;  // 算法节点 + 结果节点（DAG执行）
+    HalconCpp::HObject offline_image_;                   // 离线图像（非空时 capture() 跳过相机）
 };

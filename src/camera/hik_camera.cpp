@@ -252,6 +252,11 @@ bool HikCamera::setGain(float gain)
         return false;
     MV_CC_SetEnumValue(handle_, "GainAuto", 0);
     int ret = MV_CC_SetFloatValue(handle_, "Gain", gain);
+    if (ret != MV_OK)
+    {
+        // 部分型号使用 GainRaw 节点
+        ret = MV_CC_SetFloatValue(handle_, "GainRaw", gain);
+    }
     return ret == MV_OK;
 }
 
@@ -263,7 +268,15 @@ bool HikCamera::getGain(float &gain)
     MVCC_FLOATVALUE val{};
     int ret = MV_CC_GetFloatValue(handle_, "Gain", &val);
     if (ret != MV_OK)
+    {
+        // 部分型号使用 GainRaw 节点
+        ret = MV_CC_GetFloatValue(handle_, "GainRaw", &val);
+    }
+    if (ret != MV_OK)
+    {
+        SPDLOG_WARN("getGain failed: 0x{:08X}", ret);
         return false;
+    }
     gain = val.fCurValue;
     return true;
 }

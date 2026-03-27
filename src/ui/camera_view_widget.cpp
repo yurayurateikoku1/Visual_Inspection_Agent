@@ -17,15 +17,24 @@ CameraViewWidget::CameraViewWidget(const std::string &camera_name, QWidget *pare
     ui->widget_window->setMinimumSize(320, 240);
     ui->widget_window->setStyleSheet("background-color: #1e1e1e;");
     ui->widget_window->setAttribute(Qt::WA_NativeWindow);
-
-    connect(ui->pushButton_scaleWindow, &QPushButton::clicked,
-            this, &CameraViewWidget::onScaleWindowClicked);
 }
 
 CameraViewWidget::~CameraViewWidget()
 {
     hwindow_.reset();
     delete ui;
+}
+
+void CameraViewWidget::on_pushButton_workflow_clicked()
+{
+    emit selected(camera_name_);
+}
+
+void CameraViewWidget::on_pushButton_scaleWindow_clicked()
+{
+    maximized_ = !maximized_;
+    ui->pushButton_scaleWindow->setIcon(maximized_ ? QIcon(":/assets/fangdachuangkou2x.png") : QIcon(":/assets/suoxiaochuangkou2x.png"));
+    emit maximizeRequested(camera_name_);
 }
 
 void CameraViewWidget::initHalconWindow()
@@ -109,9 +118,3 @@ void CameraViewWidget::resizeEvent(QResizeEvent *event)
     }
 }
 
-void CameraViewWidget::onScaleWindowClicked()
-{
-    maximized_ = !maximized_;
-    ui->pushButton_scaleWindow->setIcon(maximized_ ? QIcon(":/assets/fangdachuangkou2x.png") : QIcon(":/assets/suoxiaochuangkou2x.png"));
-    emit maximizeRequested(camera_name_);
-}

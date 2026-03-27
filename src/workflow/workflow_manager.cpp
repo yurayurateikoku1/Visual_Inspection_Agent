@@ -111,6 +111,50 @@ void WorkflowManager::triggerOnce(const std::string &workflow_name)
                            { executeWorkflow(workflow_name); });
 }
 
+void WorkflowManager::rebuildWorkflow(const std::string &camera_name)
+{
+    // 找到该相机对应的 Pipeline
+    for (auto &[name, state] : pipelines_)
+    {
+        if (state->param.camera_name != camera_name)
+            continue;
+
+        if (state->busy)
+        {
+            SPDLOG_WARN("Workflow {} is busy, cannot rebuild now", name);
+            return;
+        }
+
+        // 从 AppContext 重新读取最新配置
+        for (auto &wp : AppContext::getInstance().workflowParams())
+        {
+            if (wp.camera_name == camera_name)
+            {
+                state->param = wp;
+                state->pipeline = std::make_unique<InspectionPipeline>(wp);
+                state->pipeline->build();
+                SPDLOG_INFO("Workflow {} rebuilt: {} algorithms", name, wp.algorithm_ids.size());
+                break;
+            }
+        }
+        return;
+    }
+}
+
+void WorkflowManager::setOfflineImage(const std::string &workflow_name, const HalconCpp::HObject &image)
+{
+    auto it = pipelines_.find(workflow_name);
+    if (it != pipelines_.end())
+        it->second->pipeline->setOfflineImage(image);
+}
+
+void WorkflowManager::clearOfflineImage(const std::string &workflow_name)
+{
+    auto it = pipelines_.find(workflow_name);
+    if (it != pipelines_.end())
+        it->second->pipeline->clearOfflineImage();
+}
+
 void WorkflowManager::slot_onIOStateUpdated()
 {
     if (!running_)
@@ -147,27 +191,26 @@ void WorkflowManager::executeWorkflow(const std::string &workflow_name)
 
     auto *state = it->second.get();
     auto &param = state->param;
-    auto &comm = CommManager::getInstance();
+    bool offline = state->pipeline->isOffline();
 
-    SPDLOG_INFO("Workflow {} executing...", workflow_name);
+    SPDLOG_INFO("Workflow {} executing{}...", workflow_name, offline ? " (offline)" : "");
 
-    // 1. 触发延时（对应 C# TrigDelay）
-    if (param.trigger_delay_ms > 0)
+    // ── 在线模式独有：触发延时 + 覆盖曝光 ──
+    if (!offline)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(param.trigger_delay_ms));
-    }
-
-    // 2. 覆盖曝光参数（对应 C# 不同检测切换曝光）
-    if (param.exposure_time > 0)
-    {
-        auto *cam = CameraManager::getInstance().getCamera(param.camera_name);
-        if (cam)
+        if (param.trigger_delay_ms > 0)
         {
-            cam->setExposureTime(param.exposure_time);
+            std::this_thread::sleep_for(std::chrono::milliseconds(param.trigger_delay_ms));
+        }
+        if (param.exposure_time > 0)
+        {
+            auto *cam = CameraManager::getInstance().getCamera(param.camera_name);
+            if (cam)
+                cam->setExposureTime(param.exposure_time);
         }
     }
 
-    // 3. 采集图像
+    // ── 采集图像（离线时自动使用注入的图像） ──
     if (!state->pipeline->capture())
     {
         SPDLOG_ERROR("Workflow {} capture failed", workflow_name);
@@ -175,27 +218,26 @@ void WorkflowManager::executeWorkflow(const std::string &workflow_name)
         return;
     }
 
-    // 4. 发送原图到 UI 显示
+    // ── 发送原图到 UI 显示 ──
     auto &ctx = state->pipeline->context();
     emit sign_frameCaptured(param.camera_name, ctx.image);
 
-    // 5. 执行算法链 + 结果节点（在 display_image 上叠加检测框）
+    // ── 执行算法链 ──
     auto result = state->pipeline->process(executor_);
-
-    // 6. 写 DO 输出（对应 C# OutY[0]=OK, OutY[1]=NG）
-    if (!param.comm_name.empty())
-    {
-        QMetaObject::invokeMethod(&comm, [&comm, param, pass = result.pass]()
-                                  { comm.writeSingleCoil(param.comm_name, pass ? param.do_ok_addr : param.do_ng_addr, true); }, Qt::QueuedConnection);
-    }
 
     SPDLOG_INFO("Workflow {} result: {}", workflow_name, result.pass ? "OK" : "NG");
     emit sign_inspectionFinished(workflow_name, param.camera_name, ctx.display_image, result);
 
-    // 7. 等待 DI 信号恢复（对应 C# step 12: 等 InX[0]==0）
-    //    然后清除 DO 输出
-    if (!param.comm_name.empty())
+    // ── 在线模式独有：DO 输出 + 等待 DI 恢复 ──
+    if (!offline && !param.comm_name.empty())
     {
+        auto &comm = CommManager::getInstance();
+
+        // 写 DO 输出
+        QMetaObject::invokeMethod(&comm, [&comm, param, pass = result.pass]()
+                                  { comm.writeSingleCoil(param.comm_name, pass ? param.do_ok_addr : param.do_ng_addr, true); }, Qt::QueuedConnection);
+
+        // 等待 DI 信号恢复
         auto start = std::chrono::steady_clock::now();
         while (running_)
         {

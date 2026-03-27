@@ -16,6 +16,9 @@ public:
     std::shared_ptr<IAlgorithm> create(const std::string &name) const;
     std::vector<std::string> registeredNames() const;
 
+    /// @brief 按分类返回已注册的算法 { category → [algorithm_id, ...] }
+    std::map<std::string, std::vector<std::string>> registeredByCategory() const;
+
 private:
     AlgorithmFactory() = default;
     std::map<std::string, Creator> creators_;

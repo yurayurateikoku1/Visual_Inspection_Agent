@@ -14,5 +14,8 @@
         <file>assets/yingjianguanli.png</file>
         <file>assets/fangdachuangkou2x.png</file>
         <file>assets/suoxiaochuangkou2x.png</file>
+        <file>assets/lunch.png</file>
+        <file>assets/previousimage.png</file>
+        <file>assets/nextimage.png</file>
     </qresource>
 </RCC>

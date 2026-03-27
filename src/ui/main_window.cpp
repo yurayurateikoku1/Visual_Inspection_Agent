@@ -3,6 +3,9 @@
 #include "camera_view_widget.h"
 #include "ioparam_dialog.h"
 #include "camera_param_dialog.h"
+#include "toolbox_widget.h"
+#include "workflow_view_widget.h"
+#include "operation_view_widget.h"
 #include "../app/common.h"
 #include "../app/app_context.h"
 #include "../app/config_manager.h"
@@ -10,6 +13,10 @@
 #include "../communication/comm_manager.h"
 #include "../workflow/workflow_manager.h"
 #include <spdlog/spdlog.h>
+#include <QFileDialog>
+#include <QDir>
+#include <QMessageBox>
+#include <halconcpp/HalconCpp.h>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow)
@@ -23,6 +30,26 @@ MainWindow::MainWindow(QWidget *parent)
 
     ioparam_dialog_ = new IOParamDialog(this);
     camera_param_dialog_ = new CameraParamDialog(this);
+
+    // 右侧面板：工具箱（全局）+ 工作流编辑器（按相机切换）
+    toolbox_widget_ = new ToolboxWidget(ui->widget_region_operation);
+    workflow_view_widget_ = new WorkflowViewWidget(toolbox_widget_, ui->widget_region_operation);
+    operation_view_widget_ = new OperationViewWidget(ui->widget_region_operation);
+
+    auto *op_layout = new QVBoxLayout(ui->widget_region_operation);
+    op_layout->setContentsMargins(0, 0, 0, 0);
+    op_layout->setSpacing(0);
+    op_layout->addWidget(toolbox_widget_);
+    op_layout->addWidget(workflow_view_widget_, 1);
+    op_layout->addWidget(operation_view_widget_, 2);
+
+    // 工具箱双击 → 添加算法到当前相机的流程
+    connect(toolbox_widget_, &ToolboxWidget::algorithmActivated,
+            workflow_view_widget_, &WorkflowViewWidget::addAlgorithm);
+
+    connect(workflow_view_widget_, &WorkflowViewWidget::workflowChanged,
+            this, [](const std::string &camera_name, const std::vector<std::string> &)
+            { WorkflowManager::getInstance().rebuildWorkflow(camera_name); });
 
     // 连接相机管理器的状态变化信号
     auto &mgr = CameraManager::getInstance();
@@ -46,7 +73,7 @@ MainWindow::MainWindow(QWidget *parent)
         auto it = camera_views_.find(cam_name);
         if (it != camera_views_.end())
         {
-            it->second->setStatus(QString::fromStdString(cam_name + (online ? " [在线]" : " [离线]")));
+            it->second->setStatus(online ? QStringLiteral("在线") : QStringLiteral("离线"));
         }
         setCameraLed(cam_name, online);
         if (online) SPDLOG_INFO("Camera {} online", cam_name); });
@@ -89,6 +116,10 @@ void MainWindow::initCameras()
 
     // 按 2x2 田字格布局
     layoutCameraViews();
+
+    // 默认选中第一个相机
+    if (!camera_view_list_.empty())
+        slot_cameraSelected(camera_view_list_.front()->cameraName());
 }
 
 void MainWindow::addCameraUI(const std::string &cam_name)
@@ -101,6 +132,8 @@ void MainWindow::addCameraUI(const std::string &cam_name)
     camera_view_list_.push_back(view);
     connect(view, &CameraViewWidget::maximizeRequested,
             this, &MainWindow::slot_cameraMaximizeRequested);
+    connect(view, &CameraViewWidget::selected,
+            this, &MainWindow::slot_cameraSelected);
 
     // 检查相机是否已在线
     auto *cam = CameraManager::getInstance().getCamera(cam_name);
@@ -108,8 +141,7 @@ void MainWindow::addCameraUI(const std::string &cam_name)
     if (cam)
         cam->setCallback(this);
 
-    view->setStatus(QString::fromStdString(
-        cam_name + (online ? " [在线]" : " [离线]")));
+    view->setStatus(online ? QStringLiteral("在线") : QStringLiteral("离线"));
 
     // 动态添加状态灯
     if (camera_status_leds_.find(cam_name) == camera_status_leds_.end())
@@ -185,6 +217,72 @@ void MainWindow::on_action_camera_triggered()
     camera_param_dialog_->exec();
 }
 
+void MainWindow::on_action_open_folder_triggered()
+{
+    QString dir = QFileDialog::getExistingDirectory(
+        this, QStringLiteral("选择图片文件夹"));
+    if (dir.isEmpty())
+        return;
+
+    QDir folder(dir);
+    QStringList filters = {"*.bmp", "*.png", "*.jpg", "*.jpeg", "*.tif", "*.tiff"};
+    auto entries = folder.entryInfoList(filters, QDir::Files, QDir::Name);
+    if (entries.isEmpty())
+    {
+        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("文件夹中没有找到图片"));
+        return;
+    }
+
+    offline_image_paths_.clear();
+    for (auto &fi : entries)
+        offline_image_paths_.push_back(fi.absoluteFilePath());
+    offline_image_index_ = 0;
+
+    SPDLOG_INFO("Loaded {} offline images from {}", offline_image_paths_.size(), dir.toStdString());
+
+    // 执行第一张
+    runOfflineTest(offline_image_paths_[0]);
+}
+
+void MainWindow::runOfflineTest(const QString &image_path)
+{
+    try
+    {
+        HalconCpp::HObject image;
+        HalconCpp::ReadImage(&image, image_path.toStdString().c_str());
+
+        // 显示到第一个相机 view
+        auto &wfParams = AppContext::getInstance().workflowParams();
+        if (wfParams.empty())
+        {
+            // 没有工作流配置，直接显示到第一个 camera view
+            if (!camera_view_list_.empty())
+                camera_view_list_.front()->updateFrame(image);
+            return;
+        }
+
+        // 使用第一个工作流执行离线检测
+        auto &wf = wfParams.front();
+        auto it = camera_views_.find(wf.camera_name);
+        if (it != camera_views_.end())
+            it->second->updateFrame(image);
+
+        auto &wfm = WorkflowManager::getInstance();
+        wfm.setOfflineImage(wf.name, image);
+        wfm.triggerOnce(wf.name);
+
+        SPDLOG_INFO("Offline test: [{}/{}] {}",
+                    offline_image_index_ + 1, offline_image_paths_.size(),
+                    image_path.toStdString());
+    }
+    catch (HalconCpp::HException &e)
+    {
+        SPDLOG_ERROR("Failed to read image {}: {}", image_path.toStdString(), e.ErrorMessage().Text());
+        QMessageBox::warning(this, QStringLiteral("错误"),
+                             QStringLiteral("无法读取图片: %1").arg(image_path));
+    }
+}
+
 void MainWindow::slot_cameraMaximizeRequested(const std::string &camera_name)
 {
     if (maximized_camera_name_.empty())
@@ -206,6 +304,14 @@ void MainWindow::slot_cameraMaximizeRequested(const std::string &camera_name)
             view->show();
         }
     }
+}
+
+void MainWindow::slot_cameraSelected(const std::string &camera_name)
+{
+    selected_camera_name_ = camera_name;
+
+    // 右侧面板显示该相机的工作流
+    workflow_view_widget_->loadWorkflow(camera_name);
 }
 
 void MainWindow::frameReceived(const std::string &camera_name, const HalconCpp::HObject &frame)
@@ -259,6 +365,28 @@ void MainWindow::initModbusCommunication()
 
 void MainWindow::initWorkflow()
 {
+    // 确保每个相机都有对应的 WorkflowParam
+    auto &ctx = AppContext::getInstance();
+    for (auto &cam : ctx.cameraParams())
+    {
+        bool found = false;
+        for (auto &wp : ctx.workflowParams())
+        {
+            if (wp.camera_name == cam.name)
+            {
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+        {
+            WorkflowParam wp;
+            wp.name = "wf_" + cam.name;
+            wp.camera_name = cam.name;
+            ctx.workflowParams().push_back(wp);
+        }
+    }
+
     auto &wfm = WorkflowManager::getInstance();
     wfm.buildAll();
 
@@ -284,6 +412,38 @@ void MainWindow::initWorkflow()
 
     // 自动开始（对应 C# Form1_Load 末尾 btStartAuto.PerformClick()）
     wfm.startAll();
+}
+
+void MainWindow::keyPressEvent(QKeyEvent *event)
+{
+    if (offline_image_paths_.size() <= 1)
+    {
+        QMainWindow::keyPressEvent(event);
+        return;
+    }
+
+    bool changed = false;
+    if (event->key() == Qt::Key_Right || event->key() == Qt::Key_Down)
+    {
+        if (offline_image_index_ + 1 < static_cast<int>(offline_image_paths_.size()))
+        {
+            offline_image_index_++;
+            changed = true;
+        }
+    }
+    else if (event->key() == Qt::Key_Left || event->key() == Qt::Key_Up)
+    {
+        if (offline_image_index_ > 0)
+        {
+            offline_image_index_--;
+            changed = true;
+        }
+    }
+
+    if (changed)
+        runOfflineTest(offline_image_paths_[offline_image_index_]);
+    else
+        QMainWindow::keyPressEvent(event);
 }
 
 void MainWindow::cameraErrorReceived(const std::string &camera_name, int error_code, const std::string &msg)

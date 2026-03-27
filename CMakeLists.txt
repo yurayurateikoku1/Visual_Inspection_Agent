@@ -56,6 +56,9 @@ set(PROJECT_SOURCES
     src/ui/ioparam_dialog.h   src/ui/ioparam_dialog.cpp   src/ui/ioparam_dialog.ui
     src/ui/camera_view_widget.h src/ui/camera_view_widget.cpp src/ui/camera_view_widget.ui
     src/ui/camera_param_dialog.h src/ui/camera_param_dialog.cpp src/ui/camera_param_dialog.ui
+    src/ui/toolbox_widget.h       src/ui/toolbox_widget.cpp       src/ui/toolbox_widget.ui
+    src/ui/workflow_view_widget.h src/ui/workflow_view_widget.cpp src/ui/workflow_view_widget.ui
+    src/ui/operation_view_widget.h src/ui/operation_view_widget.cpp src/ui/operation_view_widget.ui
 
     # camera
     src/camera/camera_interface.h

@@ -31,6 +31,15 @@ public:
     /// @brief 手动触发指定工作流
     void triggerOnce(const std::string &workflow_name);
 
+    /// @brief 重建指定相机的工作流（算法链变更后调用）
+    void rebuildWorkflow(const std::string &camera_name);
+
+    /// @brief 设置离线图像，之后 triggerOnce 将使用此图像而非相机采集
+    void setOfflineImage(const std::string &workflow_name, const HalconCpp::HObject &image);
+
+    /// @brief 清除离线图像，恢复相机采集模式
+    void clearOfflineImage(const std::string &workflow_name);
+
 signals:
     /// @brief 采集完成，发送原图到 UI 显示
     void sign_frameCaptured(const std::string &camera_name, const HalconCpp::HObject &image);

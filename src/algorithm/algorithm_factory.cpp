@@ -31,3 +31,15 @@ std::vector<std::string> AlgorithmFactory::registeredNames() const
         names.push_back(name);
     return names;
 }
+
+std::map<std::string, std::vector<std::string>> AlgorithmFactory::registeredByCategory() const
+{
+    std::map<std::string, std::vector<std::string>> result;
+    for (auto &[id, creator] : creators_)
+    {
+        auto algo = creator();
+        if (algo)
+            result[algo->category()].push_back(id);
+    }
+    return result;
+}

@@ -108,6 +108,7 @@ background-color: rgb(233, 238, 246);</string>
     <property name="title">
      <string>打开图像</string>
     </property>
+    <addaction name="action_open_folder"/>
    </widget>
    <widget class="QMenu" name="menu_parameter_setting">
     <property name="title">
@@ -183,6 +184,11 @@ background-color: rgb(233, 238, 246);</string>
     <font>
      <bold>true</bold>
     </font>
+   </property>
+  </action>
+  <action name="action_open_folder">
+   <property name="text">
+    <string>打开文件夹</string>
    </property>
   </action>
  </widget>

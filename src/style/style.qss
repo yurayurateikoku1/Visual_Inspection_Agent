@@ -32,8 +32,12 @@ QPushButton:pressed {
     padding-bottom: 11px;
 }
 
-
-QPushButton#pushButton_scaleWindow {
+QPushButton#pushButton_up,
+QPushButton#pushButton_down,
+QPushButton#pushButton_remove,
+QPushButton#pushButton_scaleWindow,
+QPushButton#pushButton_toolbox,
+QPushButton#pushButton_workflow {
     background-color: #1eb2f7;
     color: white;
     border: none;
@@ -47,11 +51,21 @@ QPushButton#pushButton_scaleWindow {
     min-height: 18px;
 }
 
-QPushButton#pushButton_scaleWindow:hover {
+QPushButton#pushButton_up:hover,
+QPushButton#pushButton_down:hover,
+QPushButton#pushButton_remove:hover,
+QPushButton#pushButton_scaleWindow:hover,
+QPushButton#pushButton_toolbox,
+QPushButton#pushButton_workflow:hover {
     background-color: #81c8fd;
 }
 
-QPushButton#pushButton_scaleWindow:pressed {
+QPushButton#pushButton_up:pressed,
+QPushButton#pushButton_down:pressed,
+QPushButton#pushButton_remove:pressed,
+QPushButton#pushButton_scaleWindow:pressed,
+QPushButton#pushButton_toolbox,
+QPushButton#pushButton_workflow:pressed {
     background-color: #1899d6;
 }
 

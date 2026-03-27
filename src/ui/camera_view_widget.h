@@ -31,9 +31,12 @@ public:
 
 signals:
     void maximizeRequested(const std::string &camera_name);
+    void selected(const std::string &camera_name);
 
 private slots:
-    void onScaleWindowClicked();
+
+    void on_pushButton_scaleWindow_clicked();
+    void on_pushButton_workflow_clicked();
 
 private:
     void initHalconWindow();
@@ -44,8 +47,9 @@ private:
     std::string camera_name_;
     bool maximized_ = false;
 
+
     std::unique_ptr<HalconCpp::HWindow> hwindow_; // Halcon 窗口
-    int hwindow_w_ = 0;                          // HWindow 创建时的宽度
-    int hwindow_h_ = 0;                          // HWindow 创建时的高度
+    int hwindow_w_ = 0;                           // HWindow 创建时的宽度
+    int hwindow_h_ = 0;                           // HWindow 创建时的高度
     HalconCpp::HObject current_image_;            // 当前显示的图像（缓存，用于 resize 重绘）
 };

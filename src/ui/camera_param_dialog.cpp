@@ -1,6 +1,7 @@
 #include "camera_param_dialog.h"
 #include "ui_camera_param_dialog.h"
 #include "../camera/camera_manager.h"
+#include <spdlog/spdlog.h>
 CameraParamDialog::CameraParamDialog(QWidget *parent)
     : QDialog(parent), ui(new Ui::CameraParamDialog)
 {
@@ -42,9 +43,11 @@ void CameraParamDialog::on_pushButton_getCameraParam_clicked()
     if (!cam)
         return;
 
-    float camera_gain, us;
-    cam->getGain(camera_gain);
-    cam->getExposureTime(us);
+    float camera_gain = 0.0f, us = 0.0f;
+    if (!cam->getGain(camera_gain))
+        SPDLOG_WARN("Failed to get gain from camera {}", ids.front());
+    if (!cam->getExposureTime(us))
+        SPDLOG_WARN("Failed to get exposure from camera {}", ids.front());
     ui->doubleSpinBox_cameraGain->setValue(static_cast<double>(camera_gain));
     ui->spinBox_conductorExposure->setValue(static_cast<int>(us));
 }
