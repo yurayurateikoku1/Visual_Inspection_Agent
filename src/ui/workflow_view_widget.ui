@@ -7,12 +7,12 @@
     <x>0</x>
     <y>0</y>
     <width>308</width>
-    <height>300</height>
+    <height>200</height>
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="spacing">
-    <number>0</number>
+    <number>2</number>
    </property>
    <property name="leftMargin">
     <number>0</number>
@@ -43,54 +43,32 @@
     </widget>
    </item>
    <item>
-    <widget class="QLabel" name="label_pipeline">
-     <property name="font">
-      <font>
-       <bold>false</bold>
-      </font>
+    <widget class="QTableWidget" name="tableWidget_workflows">
+     <property name="selectionBehavior">
+      <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
      </property>
-     <property name="text">
-      <string>流程列表</string>
+     <property name="selectionMode">
+      <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
      </property>
+     <property name="editTriggers">
+      <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+     </property>
+     <property name="alternatingRowColors">
+      <bool>true</bool>
+     </property>
+     <column>
+      <property name="text"><string>DI</string></property>
+     </column>
+     <column>
+      <property name="text"><string>名称</string></property>
+     </column>
+     <column>
+      <property name="text"><string>启用</string></property>
+     </column>
+     <column>
+      <property name="text"><string>操作</string></property>
+     </column>
     </widget>
-   </item>
-   <item>
-    <widget class="QListWidget" name="listWidget_pipeline"/>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_buttons">
-     <property name="spacing">
-      <number>2</number>
-     </property>
-     <item>
-      <widget class="QPushButton" name="pushButton_remove">
-       <property name="text">
-        <string>删除</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="pushButton_up">
-       <property name="text">
-        <string>上移</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="pushButton_down">
-       <property name="text">
-        <string>下移</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="pushButton_config">
-       <property name="text">
-        <string>配置</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
    </item>
   </layout>
  </widget>

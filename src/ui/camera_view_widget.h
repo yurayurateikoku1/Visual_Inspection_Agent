@@ -4,6 +4,7 @@
 #include <halconcpp/HalconCpp.h>
 #include <string>
 #include <memory>
+#include "../camera/camera_interface.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui
@@ -13,12 +14,16 @@ namespace Ui
 QT_END_NAMESPACE
 
 /// @brief 相机 view（基于 Halcon HWindow 渲染，支持叠加图形/ROI 等操作）
-class CameraViewWidget : public QWidget
+class CameraViewWidget : public QWidget, public ICameraCallback
 {
     Q_OBJECT
 public:
     explicit CameraViewWidget(const std::string &camera_name, QWidget *parent = nullptr);
     ~CameraViewWidget() override;
+
+    // ICameraCallback
+    void frameReceived(const std::string &camera_name, const HalconCpp::HObject &frame) override;
+    void cameraErrorReceived(const std::string &camera_name, int error_code, const std::string &msg) override;
 
     /// @brief 显示 Halcon HObject 图像
     void updateFrame(const HalconCpp::HObject &image);
@@ -30,6 +35,10 @@ public:
     HalconCpp::HWindow *halconWindow() { return hwindow_.get(); }
 
 signals:
+    /// @brief 帧到达（已在主线程，可直接连接 WorkflowManager）
+    void frameArrived(const std::string &camera_name, const HalconCpp::HObject &frame);
+    /// @brief 相机错误
+    void cameraError(const std::string &camera_name, int error_code);
     void maximizeRequested(const std::string &camera_name);
     void selected(const std::string &camera_name);
 

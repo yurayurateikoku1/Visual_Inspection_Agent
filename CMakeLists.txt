@@ -57,8 +57,8 @@ set(PROJECT_SOURCES
     src/ui/ioparam_dialog.h   src/ui/ioparam_dialog.cpp   src/ui/ioparam_dialog.ui
     src/ui/camera_view_widget.h src/ui/camera_view_widget.cpp src/ui/camera_view_widget.ui
     src/ui/camera_param_dialog.h src/ui/camera_param_dialog.cpp src/ui/camera_param_dialog.ui
-    src/ui/toolbox_widget.h       src/ui/toolbox_widget.cpp       src/ui/toolbox_widget.ui
     src/ui/workflow_view_widget.h src/ui/workflow_view_widget.cpp src/ui/workflow_view_widget.ui
+    src/ui/workflow_config_dialog.h src/ui/workflow_config_dialog.cpp
     src/ui/operation_view_widget.h src/ui/operation_view_widget.cpp src/ui/operation_view_widget.ui
     src/ui/terminal_settings_dialog.h src/ui/terminal_settings_dialog.cpp src/ui/terminal_settings_dialog.ui
 
@@ -77,12 +77,6 @@ set(PROJECT_SOURCES
     # workflow
     src/workflow/workflow_manager.h      src/workflow/workflow_manager.cpp
     src/workflow/inspection_pipeline.h   src/workflow/inspection_pipeline.cpp
-
-    # algorithm
-    src/algorithm/algorithm_interface.h
-    src/algorithm/algorithm_registry.cpp
-    src/algorithm/draw_roi_algorithm.h   src/algorithm/draw_roi_algorithm.cpp
-    src/algorithm/yolo_terminal_algorithm.h src/algorithm/yolo_terminal_algorithm.cpp
 
     # ai_infer
     src/ai_infer/ai_utils.h  src/ai_infer/ai_common.h     src/ai_infer/infer_backend.h

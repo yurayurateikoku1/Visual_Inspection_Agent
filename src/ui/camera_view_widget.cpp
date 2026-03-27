@@ -3,6 +3,7 @@
 #include <QResizeEvent>
 #include <QTimer>
 #include <spdlog/spdlog.h>
+#include "../camera/camera_manager.h"
 
 CameraViewWidget::CameraViewWidget(const std::string &camera_name, QWidget *parent)
     : QWidget(parent), ui(new Ui::CameraViewWidget), camera_name_(camera_name)
@@ -91,6 +92,27 @@ void CameraViewWidget::displayImage(const HalconCpp::HObject &image)
     {
         SPDLOG_ERROR("DispObj failed: {}", e.ErrorMessage().Text());
     }
+}
+
+void CameraViewWidget::frameReceived(const std::string &camera_name, const HalconCpp::HObject &frame)
+{
+    // SDK 回调线程 → 投递到主线程
+    HalconCpp::HObject image_copy = frame;
+    QMetaObject::invokeMethod(this, [this, cam_name = camera_name, img = std::move(image_copy)]()
+    {
+        updateFrame(img);
+        emit frameArrived(cam_name, img);
+    }, Qt::QueuedConnection);
+}
+
+void CameraViewWidget::cameraErrorReceived(const std::string &camera_name, int error_code, const std::string &msg)
+{
+    SPDLOG_ERROR("Camera {} error 0x{:08X}: {}", camera_name, error_code, msg);
+    QMetaObject::invokeMethod(this, [this, cam_name = camera_name, code = error_code]()
+    {
+        setStatus(QStringLiteral("错误"));
+        emit cameraError(cam_name, code);
+    }, Qt::QueuedConnection);
 }
 
 void CameraViewWidget::updateFrame(const HalconCpp::HObject &image)

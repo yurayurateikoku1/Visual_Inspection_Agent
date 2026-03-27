@@ -10,25 +10,34 @@ InspectionPipeline::~InspectionPipeline() = default;
 
 void InspectionPipeline::build()
 {
-    algorithms_.clear();
+    detector_.reset();
 
-    for (size_t i = 0; i < param_.algorithm_ids.size(); ++i)
+    if (param_.yolo.enabled && !param_.yolo.model_path.empty())
     {
-        auto algo = createAlgorithm(param_.algorithm_ids[i]);
-        if (!algo)
+        try
         {
-            spdlog::warn("Algorithm {} not found, skipping", param_.algorithm_ids[i]);
-            continue;
+            AIInfer::YOLOSettings settings;
+            settings.model_path      = param_.yolo.model_path;
+            settings.score_threshold = param_.yolo.score_threshold;
+            settings.nms_threshold   = param_.yolo.nms_threshold;
+            settings.end2end         = param_.yolo.end2end;
+            settings.task_type       = (param_.yolo.task_type == "YOLO_OBB")
+                                           ? AIInfer::TaskType::YOLO_OBB
+                                           : AIInfer::TaskType::YOLO_DET;
+            settings.input_type  = AIInfer::InputDimensionType::DYNAMIC;
+            settings.engine_type = AIInfer::EngineType::OPENVINO;
+
+            detector_ = std::make_unique<AIInfer::YoloDetector>(settings);
+            spdlog::info("Pipeline {}: YOLO detector loaded: {}", param_.name, settings.model_path);
         }
-
-        // 从已保存参数恢复状态
-        if (i < param_.algorithm_params.size() && !param_.algorithm_params[i].is_null())
-            algo->loadParams(param_.algorithm_params[i]);
-
-        algorithms_.push_back(std::move(algo));
+        catch (const std::exception &e)
+        {
+            spdlog::error("Pipeline {}: YOLO init failed: {}", param_.name, e.what());
+        }
     }
 
-    spdlog::info("Pipeline {} built: {} algorithms", param_.name, algorithms_.size());
+    spdlog::info("Pipeline {} built: roi={} yolo={}", param_.name,
+                 param_.roi.enabled, param_.yolo.enabled);
 }
 
 void InspectionPipeline::setOfflineImage(const HalconCpp::HObject &image)
@@ -43,19 +52,17 @@ void InspectionPipeline::clearOfflineImage()
 
 bool InspectionPipeline::capture()
 {
-    ctx_ = NodeContext{};
+    ctx_             = NodeContext{};
     ctx_.camera_name = param_.camera_name;
     ctx_.result.pass = true;
 
-    // 离线模式
     if (offline_image_.IsInitialized())
     {
-        ctx_.image = offline_image_;
+        ctx_.image         = offline_image_;
         ctx_.display_image = offline_image_;
         return true;
     }
 
-    // 在线模式：从相机采集
     auto *cam = CameraManager::getInstance().getCamera(param_.camera_name);
     if (!cam)
     {
@@ -64,7 +71,7 @@ bool InspectionPipeline::capture()
     }
     if (!cam->grabOne(ctx_.image))
     {
-        spdlog::error("Pipeline {}: grabOne failed for {}", param_.name, param_.camera_name);
+        spdlog::error("Pipeline {}: grabOne failed", param_.name);
         return false;
     }
     ctx_.display_image = ctx_.image;
@@ -73,29 +80,87 @@ bool InspectionPipeline::capture()
 
 InspectionResult InspectionPipeline::process()
 {
-    // 顺序执行算法链
-    for (auto &algo : algorithms_)
-    {
-        if (!algo->process(ctx_))
-            spdlog::error("Algorithm {} failed", algo->name());
-    }
+    if (param_.roi.enabled)
+        processRoi();
 
-    // 打时间戳
+    if (param_.yolo.enabled)
+        processYolo();
+
     auto now = std::chrono::system_clock::now();
-    ctx_.result.timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                   now.time_since_epoch())
-                                   .count();
+    ctx_.result.timestamp_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 
-    spdlog::info("Pipeline {}: camera={} pass={} detail={}",
-                 param_.name, ctx_.camera_name, ctx_.result.pass, ctx_.result.detail);
-
+    spdlog::info("Pipeline {}: pass={} detail={}",
+                 param_.name, ctx_.result.pass, ctx_.result.detail);
     return ctx_.result;
 }
 
-std::vector<IAlgorithm *> InspectionPipeline::algorithms()
+void InspectionPipeline::processRoi()
 {
-    std::vector<IAlgorithm *> ptrs;
-    for (auto &a : algorithms_)
-        ptrs.push_back(a.get());
-    return ptrs;
+    const auto &roi = param_.roi;
+    try
+    {
+        HalconCpp::HObject cropped;
+        HalconCpp::CropRectangle1(ctx_.image, &cropped,
+                                   static_cast<int>(roi.row1), static_cast<int>(roi.col1),
+                                   static_cast<int>(roi.row2), static_cast<int>(roi.col2));
+        ctx_.image         = cropped;
+        ctx_.display_image = cropped;
+    }
+    catch (const HalconCpp::HException &e)
+    {
+        spdlog::error("Pipeline {}: ROI crop failed: {}", param_.name, e.ErrorMessage().Text());
+        ctx_.result.pass    = false;
+        ctx_.result.detail += "ROI crop failed; ";
+    }
+}
+
+void InspectionPipeline::processYolo()
+{
+    if (!detector_)
+    {
+        ctx_.result.pass    = false;
+        ctx_.result.detail += "YOLO detector not initialized; ";
+        return;
+    }
+
+    try
+    {
+        auto det_result = detector_->detect(ctx_.image);
+
+        bool has_det = std::visit([](const auto &dets) { return !dets.empty(); }, det_result);
+        if (!has_det)
+        {
+            ctx_.result.pass    = false;
+            ctx_.result.detail += "no object detected; ";
+            ctx_.result.confidence = 0.0;
+            return;
+        }
+
+        double max_conf = 0.0;
+        int count       = 0;
+        std::visit([&](const auto &dets)
+                   {
+                       count = static_cast<int>(dets.size());
+                       for (const auto &d : dets)
+                       {
+                           double c;
+                           if constexpr (std::is_same_v<std::decay_t<decltype(d)>, AIInfer::Detection>)
+                               c = d.conf;
+                           else
+                               c = d.detection.conf;
+                           if (c > max_conf) max_conf = c;
+                       }
+                   },
+                   det_result);
+
+        ctx_.result.confidence = max_conf;
+        ctx_.result.detail    += "detected " + std::to_string(count) + " objects; ";
+    }
+    catch (const std::exception &e)
+    {
+        spdlog::error("Pipeline {}: YOLO failed: {}", param_.name, e.what());
+        ctx_.result.pass    = false;
+        ctx_.result.detail += std::string("YOLO exception: ") + e.what() + "; ";
+    }
 }

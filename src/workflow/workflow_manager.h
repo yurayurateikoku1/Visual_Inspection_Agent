@@ -8,20 +8,21 @@
 #include <array>
 #include <memory>
 #include <atomic>
+#include <mutex>
 
 /// @brief 工作流管理器
-///        监听 CommManager 的 DI 状态变化，检测上升沿后触发对应 Pipeline
-///        状态机：DI触发 → 延时 → 软触发拍照 → 算法检测 → DO输出
+///        每条 WorkflowParam 对应一个独立状态机：
+///        IDLE → WAITING_FRAME（DI上升沿）→ INSPECTING（帧到达）→ HOLDING_RESULT → IDLE
 class WorkflowManager : public QObject
 {
     Q_OBJECT
 public:
     static WorkflowManager &getInstance();
 
-    /// @brief 根据配置构建所有 Pipeline
+    /// @brief 根据 AppContext 中的 WorkflowParam 构建所有 Pipeline
     void buildAll();
 
-    /// @brief 开始自动检测
+    /// @brief 开始自动检测（响应 DI 触发）
     void startAll();
 
     /// @brief 停止自动检测
@@ -29,50 +30,49 @@ public:
 
     bool isRunning() const { return running_; }
 
-    /// @brief 手动触发指定工作流
+    /// @brief 手动触发（离线测试用）：跳过 DI 检测，直接用当前最新帧
     void triggerOnce(const std::string &workflow_name);
 
-    /// @brief 重建指定相机的工作流（算法链变更后调用）
-    void rebuildWorkflow(const std::string &camera_name);
-
-    /// @brief 设置离线图像，之后 triggerOnce 将使用此图像而非相机采集
-    void setOfflineImage(const std::string &workflow_name, const HalconCpp::HObject &image);
-
-    /// @brief 清除离线图像，恢复相机采集模式
-    void clearOfflineImage(const std::string &workflow_name);
+    /// @brief 参数变更后重建指定 workflow 的 Pipeline
+    void rebuildWorkflow(const std::string &workflow_name);
 
 signals:
-    /// @brief 采集完成，发送原图到 UI 显示
     void sign_frameCaptured(const std::string &camera_name, const HalconCpp::HObject &image);
-
-    /// @brief 检测完成，发送叠加结果的显示图 + 检测结果
     void sign_inspectionFinished(const std::string &workflow_name, const std::string &camera_name,
                                  const HalconCpp::HObject &display_image, const InspectionResult &result);
-
-    /// @brief 运行状态变化
     void sign_runningChanged(bool running);
+    /// @brief rebuildWorkflow 因 workflow 非 IDLE 状态而失败时发出
+    void sign_rebuildFailed(const std::string &workflow_name);
+
+public slots:
+    /// @brief 接收 CameraViewWidget::frameArrived，更新各 workflow 的最新帧缓存
+    ///        若该 workflow 处于 WAITING_FRAME 状态则立即触发检测
+    void onFrameArrived(const std::string &camera_name, const HalconCpp::HObject &frame);
 
 private slots:
-    /// @brief 响应 CommManager IO 状态更新，检测 DI 上升沿
     void slot_onIOStateUpdated();
 
 private:
     WorkflowManager();
     ~WorkflowManager();
 
-    /// @brief 执行一次检测流程
     void executeWorkflow(const std::string &workflow_name);
+
+    enum class State { IDLE, WAITING_FRAME, INSPECTING, HOLDING_RESULT };
 
     struct PipelineState
     {
         WorkflowParam param;
         std::unique_ptr<InspectionPipeline> pipeline;
-        std::atomic<bool> busy{false}; // 正在执行中，防止重入
-        bool last_di_state = false;    // 上一次 DI 状态，用于检测上升沿
+        std::atomic<State> state{State::IDLE};
+        bool last_di_state = false;
+
+        HalconCpp::HObject latest_frame; // 最新帧缓存（onFrameArrived 覆盖写）
+        std::mutex frame_mutex;
     };
 
     std::map<std::string, std::unique_ptr<PipelineState>> pipelines_;
     std::array<bool, 8> last_di_state_{};
     std::atomic<bool> running_{false};
-    tf::Executor &executor_; // 引用 AppContext 持有的共享线程池
+    tf::Executor &executor_;
 };

@@ -87,29 +87,44 @@ struct LightParam
     bool use_modbus = false;          // true=通过Modbus/PLC控制, false=串口直接控制（对应C# cbGYTX）
 };
 
-/// @brief 工作流参数（每个相机一条独立的检测流水线）
+/// @brief 工作流参数（每个相机最多4条，对应 DI0~DI3 触发，每条独立算法链）
 ///        参照 C# MainTask 状态机：DI触发 → 软触发拍照 → 算法检测 → DO输出结果
 struct WorkflowParam
 {
-    std::string name;        // 名称，如 "剥皮检测"
+    std::string name;        // 名称，如 "wf_ccd1_0"
     std::string camera_name; // 绑定的相机名称
     std::string comm_name;   // 绑定的通信通道名称
+    bool enabled = false;    // 是否启用此条工作流
 
     // DI 触发配置
-    uint16_t trigger_di_addr = 0; // 触发信号的 DI 线圈地址（如 DI0=0, DI1=1）
-    int trigger_delay_ms = 0;     // 触发后延时（ms），对应 C# TrigDelay
+    uint16_t trigger_di_addr = 0; // 触发信号的 DI 线圈地址（0~3）
+    int trigger_delay_ms = 0;     // 触发后延时（ms）
 
     // DO 输出配置
-    uint16_t do_ok_addr = 500; // OK 信号的 DO 线圈地址（对应 C# Modbus_0x[500]）
-    uint16_t do_ng_addr = 501; // NG 信号的 DO 线圈地址（对应 C# Modbus_0x[501]）
-    int result_hold_ms = 100;  // 结果信号保持时间（ms），等 DI 恢复后清除
+    uint16_t do_ok_addr = 500;
+    uint16_t do_ng_addr = 501;
+    int result_hold_ms = 100;
 
-    // 算法链
-    std::vector<std::string> algorithm_ids;          // 按顺序执行的算法ID列表
-    std::vector<nlohmann::json> algorithm_params;    // 与 algorithm_ids 并行，每个算法的配置参数
+    // 相机参数覆盖
+    float exposure_time = -1.0f; // <=0 表示不覆盖
 
-    // 相机参数覆盖（检测时可能需要不同曝光，参照 C# 不同检测切换曝光）
-    float exposure_time = -1.0f; // <=0 表示不覆盖，使用相机默认值
+    // ROI 裁剪参数
+    struct RoiParam
+    {
+        bool enabled = false;
+        double row1 = 0, col1 = 0, row2 = 0, col2 = 0;
+    } roi;
+
+    // YOLO 检测参数
+    struct YoloParam
+    {
+        bool enabled = false;
+        std::string model_path;
+        float score_threshold = 0.5f;
+        float nms_threshold = 0.5f;
+        std::string task_type = "YOLO_DET"; // "YOLO_DET" | "YOLO_OBB"
+        bool end2end = false;
+    } yolo;
 };
 
 struct CommunicationParam
