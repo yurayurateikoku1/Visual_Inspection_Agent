@@ -55,12 +55,12 @@ void CameraManager::enumAndOpenAll()
     }
 
     // 按配置中的相机参数，根据 name 匹配枚举到的设备
-    for (auto &cfg : AppContext::getInstance().cameraParams())
+    for (auto &[cam_name, cfg] : AppContext::getInstance().cameraParams())
     {
-        auto it = name_dev_map.find(cfg.name);
+        auto it = name_dev_map.find(cam_name);
         if (it == name_dev_map.end())
         {
-            SPDLOG_WARN("Camera {} not found in enumeration", cfg.name);
+            SPDLOG_WARN("Camera {} not found in enumeration", cam_name);
             continue;
         }
 
@@ -69,9 +69,9 @@ void CameraManager::enumAndOpenAll()
 
         if (addCamera(cfg, it->second.info))
         {
-            auto *cam = getCamera(cfg.name);
+            auto *cam = getCamera(cam_name);
             cam->startGrabbing();
-            SPDLOG_INFO("Camera {} (IP: {}) started", cfg.name, cfg.ip);
+            SPDLOG_INFO("Camera {} (IP: {}) started", cam_name, cfg.ip);
         }
     }
 }
@@ -265,17 +265,17 @@ void CameraManager::slot_reconnectTimer()
 
     // ── 3. 尝试打开配置中尚未管理的相机（启动时未连接，现在上线了） ──
     {
-        for (auto &cfg : AppContext::getInstance().cameraParams())
+        for (auto &[cam_name, cfg] : AppContext::getInstance().cameraParams())
         {
             {
                 std::lock_guard lock(mutex_);
-                if (cameras_.count(cfg.name))
+                if (cameras_.count(cam_name))
                     continue;
             }
-            if (offline_cameras_.count(cfg.name))
+            if (offline_cameras_.count(cam_name))
                 continue;
 
-            auto it = online_devs.find(cfg.name);
+            auto it = online_devs.find(cam_name);
             if (it == online_devs.end())
                 continue;
 
@@ -284,12 +284,12 @@ void CameraManager::slot_reconnectTimer()
 
             if (addCamera(cfg, it->second.info))
             {
-                auto *cam = getCamera(cfg.name);
+                auto *cam = getCamera(cam_name);
                 if (cam)
                 {
                     cam->startGrabbing();
-                    status_changes.emplace_back(cfg.name, true);
-                    SPDLOG_INFO("Camera {} (IP: {}) connected", cfg.name, cfg.ip);
+                    status_changes.emplace_back(cam_name, true);
+                    SPDLOG_INFO("Camera {} (IP: {}) connected", cam_name, cfg.ip);
                 }
             }
         }

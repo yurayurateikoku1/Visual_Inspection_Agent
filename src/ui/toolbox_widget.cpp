@@ -1,7 +1,5 @@
 #include "toolbox_widget.h"
 #include "ui_toolbox_widget.h"
-#include "../algorithm/algorithm_factory.h"
-#include "../algorithm/algorithm_interface.h"
 
 ToolboxWidget::ToolboxWidget(QWidget *parent)
     : QWidget(parent), ui(new Ui::ToolboxWidget)
@@ -35,40 +33,36 @@ void ToolboxWidget::initToolbox()
     ui->treeWidget_toolbox->clear();
     algo_name_cache_.clear();
 
-    auto by_cat = AlgorithmFactory::instance().registeredByCategory();
-
-    if (by_cat.empty())
+    // 静态工具列表
+    struct ToolEntry
     {
-        const char *default_cats[] = {
-            AlgorithmCategory::DETECTION,
-            AlgorithmCategory::MEASUREMENT,
-            AlgorithmCategory::IMAGE_PROCESSING,
-            AlgorithmCategory::AI_INFER,
-        };
-        for (auto cat : default_cats)
-        {
-            auto *cat_item = new QTreeWidgetItem(ui->treeWidget_toolbox);
-            cat_item->setText(0, QString::fromUtf8(cat));
-            cat_item->setFlags(cat_item->flags() & ~Qt::ItemIsSelectable);
-        }
-        return;
-    }
+        const char *id;
+        const char *display;
+    };
+    struct CategoryEntry
+    {
+        const char *category;
+        std::vector<ToolEntry> tools;
+    };
 
-    for (auto &[category, ids] : by_cat)
+    std::vector<CategoryEntry> categories = {
+        {"工具", {{"DrawROI", "绘制ROI"}}},
+        {"AI推理", {{"YoloTerminal", "YOLO端子检测"}}},
+    };
+
+    for (auto &cat : categories)
     {
         auto *cat_item = new QTreeWidgetItem(ui->treeWidget_toolbox);
-        cat_item->setText(0, QString::fromUtf8(category));
+        cat_item->setText(0, QString::fromUtf8(cat.category));
         cat_item->setFlags(cat_item->flags() & ~Qt::ItemIsSelectable);
 
-        for (auto &id : ids)
+        for (auto &tool : cat.tools)
         {
-            auto algo = AlgorithmFactory::instance().create(id);
-            std::string display = algo ? algo->name() : id;
-            algo_name_cache_[id] = display;
+            algo_name_cache_[tool.id] = tool.display;
 
             auto *algo_item = new QTreeWidgetItem(cat_item);
-            algo_item->setText(0, QString::fromStdString(display));
-            algo_item->setData(0, Qt::UserRole, QString::fromStdString(id));
+            algo_item->setText(0, QString::fromUtf8(tool.display));
+            algo_item->setData(0, Qt::UserRole, QString::fromStdString(tool.id));
         }
     }
 

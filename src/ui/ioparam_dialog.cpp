@@ -52,7 +52,7 @@ void IOParamDialog::loadParam()
     auto &cfgs = AppContext::getInstance().commParams();
     if (!cfgs.empty())
     {
-        auto &cfg = cfgs[0];
+        auto &cfg = cfgs.begin()->second;
         ui->spinBox_comPort->setValue(
             cfg.serial_port.size() > 3 ? std::stoi(cfg.serial_port.substr(3)) : 1);
         ui->lineEdit_ipAddress->setText(QString::fromStdString(cfg.ip));
@@ -83,10 +83,11 @@ void IOParamDialog::saveParam()
     auto &cfgs = ctx.commParams();
     if (cfgs.empty())
     {
-        cfgs.push_back(CommunicationParam{});
-        cfgs[0].name = "plc_1";
+        CommunicationParam cp;
+        cp.name = "plc_1";
+        cfgs["plc_1"] = cp;
     }
-    auto &cfg = cfgs[0];
+    auto &cfg = cfgs.begin()->second;
     cfg.serial_port = "COM" + std::to_string(ui->spinBox_comPort->value());
     cfg.ip = ui->lineEdit_ipAddress->text().toStdString();
     cfg.port = ui->spinBox_ipPort->value();

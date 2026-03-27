@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>280</width>
+    <width>308</width>
     <height>300</height>
    </rect>
   </property>
@@ -80,6 +80,13 @@
       <widget class="QPushButton" name="pushButton_down">
        <property name="text">
         <string>下移</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButton_config">
+       <property name="text">
+        <string>配置</string>
        </property>
       </widget>
      </item>

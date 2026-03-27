@@ -3,8 +3,10 @@
 #include <QWidget>
 #include <string>
 #include <vector>
+#include <functional>
 
 class ToolboxWidget;
+class CameraViewWidget;
 
 QT_BEGIN_NAMESPACE
 namespace Ui
@@ -20,6 +22,10 @@ class WorkflowViewWidget : public QWidget
 public:
     explicit WorkflowViewWidget(ToolboxWidget *toolbox, QWidget *parent = nullptr);
     ~WorkflowViewWidget() override;
+
+    /// 设置查找 CameraViewWidget 的回调（由 MainWindow 提供）
+    using CameraViewFinder = std::function<CameraViewWidget *(const std::string &)>;
+    void setCameraViewFinder(CameraViewFinder finder) { camera_view_finder_ = std::move(finder); }
 
     /// @brief 加载指定相机的工作流到界面
     void loadWorkflow(const std::string &camera_name);
@@ -37,13 +43,15 @@ private slots:
     void on_pushButton_down_clicked();
     void on_pushButton_up_clicked();
     void on_pushButton_remove_clicked();
+    void on_pushButton_config_clicked();
 
 private:
     void syncPipelineList();
     void commitChanges();
 
     Ui::WorkflowViewWidget *ui;
-    ToolboxWidget *toolbox_; // 引用全局工具箱（用于获取显示名）
+    ToolboxWidget *toolbox_;
+    CameraViewFinder camera_view_finder_;
     std::string current_camera_name_;
     std::vector<std::string> current_algo_ids_;
 };

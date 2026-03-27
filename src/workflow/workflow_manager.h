@@ -2,6 +2,7 @@
 
 #include "inspection_pipeline.h"
 #include "app/common.h"
+#include <taskflow/taskflow.hpp>
 #include <QObject>
 #include <map>
 #include <array>

@@ -5,8 +5,11 @@
 #include <memory>
 #include <functional>
 #include <cstdint>
+#include <any>
+#include <map>
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
+#include <halconcpp/HalconCpp.h>
 
 using json = nlohmann::json;
 
@@ -16,6 +19,16 @@ struct InspectionResult
     std::string detail;
     double confidence = 0.0;
     int64_t timestamp_ms = 0;
+};
+
+/// 运行时上下文：在 Pipeline 各步骤间传递数据
+struct NodeContext
+{
+    std::string camera_name;
+    HalconCpp::HObject image;         // 原图
+    HalconCpp::HObject display_image; // 叠加检测结果的显示图
+    InspectionResult result;
+    std::map<std::string, std::any> data; // 扩展数据（如 ROI 坐标）
 };
 
 struct CameraParam
@@ -92,7 +105,8 @@ struct WorkflowParam
     int result_hold_ms = 100;  // 结果信号保持时间（ms），等 DI 恢复后清除
 
     // 算法链
-    std::vector<std::string> algorithm_ids; // 按顺序执行的算法ID列表
+    std::vector<std::string> algorithm_ids;          // 按顺序执行的算法ID列表
+    std::vector<nlohmann::json> algorithm_params;    // 与 algorithm_ids 并行，每个算法的配置参数
 
     // 相机参数覆盖（检测时可能需要不同曝光，参照 C# 不同检测切换曝光）
     float exposure_time = -1.0f; // <=0 表示不覆盖，使用相机默认值

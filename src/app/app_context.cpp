@@ -15,9 +15,9 @@ AppContext::AppContext()
     cam1.ip = "192.168.2.100";
     cam1.exposure_time = 10000.0f;
     cam1.gain = 0.0f;
-    cam1.trigger_mode = 0; // 软触发（0=连续, 1=软触发, 2=硬触发）
+    cam1.trigger_mode = 0;
     cam1.rotation_deg = 0;
-    camera_params_.push_back(cam1);
+    camera_params_[cam1.name] = cam1;
 
     // ── 默认通信参数 ──
     CommunicationParam comm1;
@@ -26,7 +26,7 @@ AppContext::AppContext()
     comm1.ip = "192.168.1.200";
     comm1.port = 502;
     comm1.slave_address = 1;
-    comm_params_.push_back(comm1);
+    comm_params_[comm1.name] = comm1;
 
     // ── 默认光源参数 ──
     light_param_.serial_port = "COM1";
@@ -48,5 +48,5 @@ AppContext::AppContext()
     wf1.do_ng_addr = 501;
     wf1.result_hold_ms = 100;
     wf1.exposure_time = -1.0f;
-    workflow_params_.push_back(wf1);
+    workflow_params_[wf1.camera_name] = wf1;
 }

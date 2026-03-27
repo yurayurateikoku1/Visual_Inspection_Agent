@@ -43,6 +43,12 @@ MainWindow::MainWindow(QWidget *parent)
     op_layout->addWidget(workflow_view_widget_, 1);
     op_layout->addWidget(operation_view_widget_, 2);
 
+    // 提供 CameraViewWidget 查找回调
+    workflow_view_widget_->setCameraViewFinder([this](const std::string &name) -> CameraViewWidget *
+                                               {
+        auto it = camera_views_.find(name);
+        return it != camera_views_.end() ? it->second : nullptr; });
+
     // 工具箱双击 → 添加算法到当前相机的流程
     connect(toolbox_widget_, &ToolboxWidget::algorithmActivated,
             workflow_view_widget_, &WorkflowViewWidget::addAlgorithm);
@@ -100,9 +106,9 @@ MainWindow::~MainWindow()
 void MainWindow::initCameras()
 {
     // 根据配置预创建所有相机 view（无论相机是否在线）
-    for (auto &cam_cfg : AppContext::getInstance().cameraParams())
+    for (auto &[name, cam_cfg] : AppContext::getInstance().cameraParams())
     {
-        addCameraUI(cam_cfg.name);
+        addCameraUI(name);
     }
 
     // 为已在线的相机绑定回调
@@ -180,13 +186,13 @@ void MainWindow::initStatusBar()
 
     // Modbus 通信状态灯
     auto &comm_mgr = CommManager::getInstance();
-    for (auto &comm_cfg : AppContext::getInstance().commParams())
+    for (auto &[name, comm_cfg] : AppContext::getInstance().commParams())
     {
-        ui->statusbar->addPermanentWidget(new QLabel(QString::fromStdString(comm_cfg.name), this));
+        ui->statusbar->addPermanentWidget(new QLabel(QString::fromStdString(name), this));
         auto *led = new QLabel(this);
         led->setPixmap(QPixmap(":/assets/zhuangtaideng0.png"));
         ui->statusbar->addPermanentWidget(led);
-        comm_status_leds_[comm_cfg.name] = led;
+        comm_status_leds_[name] = led;
     }
 
     // 光源状态灯
@@ -262,7 +268,7 @@ void MainWindow::runOfflineTest(const QString &image_path)
         }
 
         // 使用第一个工作流执行离线检测
-        auto &wf = wfParams.front();
+        auto &[cam_name, wf] = *wfParams.begin();
         auto it = camera_views_.find(wf.camera_name);
         if (it != camera_views_.end())
             it->second->updateFrame(image);
@@ -356,7 +362,7 @@ void MainWindow::setLightLed(bool connected)
 void MainWindow::initModbusCommunication()
 {
     auto &mgr = CommManager::getInstance();
-    for (auto &comm_cfg : AppContext::getInstance().commParams())
+    for (auto &[name, comm_cfg] : AppContext::getInstance().commParams())
     {
         QMetaObject::invokeMethod(&mgr, [&mgr, comm_cfg]()
                                   { mgr.addComm(comm_cfg); }, Qt::QueuedConnection);
@@ -367,23 +373,14 @@ void MainWindow::initWorkflow()
 {
     // 确保每个相机都有对应的 WorkflowParam
     auto &ctx = AppContext::getInstance();
-    for (auto &cam : ctx.cameraParams())
+    for (auto &[cam_name, cam] : ctx.cameraParams())
     {
-        bool found = false;
-        for (auto &wp : ctx.workflowParams())
-        {
-            if (wp.camera_name == cam.name)
-            {
-                found = true;
-                break;
-            }
-        }
-        if (!found)
+        if (ctx.workflowParams().count(cam_name) == 0)
         {
             WorkflowParam wp;
-            wp.name = "wf_" + cam.name;
-            wp.camera_name = cam.name;
-            ctx.workflowParams().push_back(wp);
+            wp.name = "wf_" + cam_name;
+            wp.camera_name = cam_name;
+            ctx.workflowParams()[cam_name] = wp;
         }
     }
 

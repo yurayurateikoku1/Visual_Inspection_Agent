@@ -19,6 +19,7 @@ namespace AIInfer
         TaskType task_type;
         InputDimensionType input_type;
         EngineType engine_type;
+        bool end2end;
     };
 
     class YoloDetector

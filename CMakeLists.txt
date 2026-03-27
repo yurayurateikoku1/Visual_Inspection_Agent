@@ -31,6 +31,7 @@ endif()
 find_package(spdlog CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS world)
+find_package(OpenVINO REQUIRED COMPONENTS Runtime)
 
 # ── HIK MVS SDK ──────────────────────────────────────────────
 set(MVS_SDK_DIR "D:/MVS/Development")
@@ -59,6 +60,7 @@ set(PROJECT_SOURCES
     src/ui/toolbox_widget.h       src/ui/toolbox_widget.cpp       src/ui/toolbox_widget.ui
     src/ui/workflow_view_widget.h src/ui/workflow_view_widget.cpp src/ui/workflow_view_widget.ui
     src/ui/operation_view_widget.h src/ui/operation_view_widget.cpp src/ui/operation_view_widget.ui
+    src/ui/terminal_settings_dialog.h src/ui/terminal_settings_dialog.cpp src/ui/terminal_settings_dialog.ui
 
     # camera
     src/camera/camera_interface.h
@@ -75,21 +77,18 @@ set(PROJECT_SOURCES
     # workflow
     src/workflow/workflow_manager.h      src/workflow/workflow_manager.cpp
     src/workflow/inspection_pipeline.h   src/workflow/inspection_pipeline.cpp
-    src/workflow/nodes/node_base.h
-    src/workflow/nodes/capture_node.h    src/workflow/nodes/capture_node.cpp
-    src/workflow/nodes/algorithm_node.h  src/workflow/nodes/algorithm_node.cpp
-    src/workflow/nodes/result_node.h     src/workflow/nodes/result_node.cpp
 
     # algorithm
     src/algorithm/algorithm_interface.h
-    src/algorithm/algorithm_factory.h    src/algorithm/algorithm_factory.cpp
+    src/algorithm/algorithm_registry.cpp
+    src/algorithm/draw_roi_algorithm.h   src/algorithm/draw_roi_algorithm.cpp
+    src/algorithm/yolo_terminal_algorithm.h src/algorithm/yolo_terminal_algorithm.cpp
 
     # ai_infer
-    # src/ai_infer/ai_utils.h  src/ai_infer/ai_common.h     src/ai_infer/infer_backend.h
-    # src/ai_infer/preprocess.h src/ai_infer/preprocess.cpp
-    # src/ai_infer/postprocess.h src/ai_infer/postprocess.cpp
-    # src/ai_infer/yolo.h src/ai_infer/yolo.cpp
-    # src/ai_infer/openvino_infer.h src/ai_infer/openvino_infer.cpp
+    src/ai_infer/ai_utils.h  src/ai_infer/ai_common.h     src/ai_infer/infer_backend.h
+    src/ai_infer/postprocess.h src/ai_infer/postprocess.cpp
+    src/ai_infer/yolo.h src/ai_infer/yolo.cpp
+    src/ai_infer/openvino_infer.h src/ai_infer/openvino_infer.cpp
 
 
     # storage
@@ -142,6 +141,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${OpenCV_LIBS}
     ${MVS_LIB_DIR}/MvCameraControl.lib
     ${HACLON_LIB_DIR}/halconcpp.lib
+    openvino::runtime
 )
 
     # ── Copy data to exe dir ──
@@ -168,6 +168,19 @@ if(WIN32)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     ${_opencv_dlls} $<TARGET_FILE_DIR:${PROJECT_NAME}>
             COMMENT "Copy OpenCV DLLs"
+        )
+    endif()
+
+    # ── OpenVINO DLLs ──
+    set(_ov_sdk_dir "D:/C++Library/openvino_toolkit_windows_2026.0.0.20965.c6d6a13a886_x86_64/runtime")
+    file(GLOB _ov_dlls "${_ov_sdk_dir}/bin/intel64/Release/openvino*.dll")
+    file(GLOB _tbb_dlls "${_ov_sdk_dir}/3rdparty/tbb/bin/tbb*.dll")
+    list(FILTER _tbb_dlls EXCLUDE REGEX "_debug\\.dll$")
+    if(_ov_dlls OR _tbb_dlls)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${_ov_dlls} ${_tbb_dlls} $<TARGET_FILE_DIR:${PROJECT_NAME}>
+            COMMENT "Copy OpenVINO + TBB DLLs"
         )
     endif()
 

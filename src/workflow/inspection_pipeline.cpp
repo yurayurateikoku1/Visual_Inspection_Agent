@@ -1,9 +1,7 @@
 #include "inspection_pipeline.h"
-#include "nodes/capture_node.h"
-#include "nodes/algorithm_node.h"
-#include "nodes/result_node.h"
-#include "algorithm/algorithm_factory.h"
+#include "camera/camera_manager.h"
 #include <spdlog/spdlog.h>
+#include <chrono>
 
 InspectionPipeline::InspectionPipeline(const WorkflowParam &param)
     : param_(param) {}
@@ -12,50 +10,25 @@ InspectionPipeline::~InspectionPipeline() = default;
 
 void InspectionPipeline::build()
 {
-    taskflow_.clear();
-    process_nodes_.clear();
+    algorithms_.clear();
 
-    // 采集节点（单独管理，不放入 DAG）
-    capture_node_ = std::make_unique<CaptureNode>(param_.camera_name);
-
-    // 算法节点
-    for (auto &algo_id : param_.algorithm_ids)
+    for (size_t i = 0; i < param_.algorithm_ids.size(); ++i)
     {
-        auto algo = AlgorithmFactory::instance().create(algo_id);
-        if (algo)
+        auto algo = createAlgorithm(param_.algorithm_ids[i]);
+        if (!algo)
         {
-            process_nodes_.push_back(std::make_unique<AlgorithmNode>(std::move(algo)));
+            spdlog::warn("Algorithm {} not found, skipping", param_.algorithm_ids[i]);
+            continue;
         }
-        else
-        {
-            spdlog::warn("Algorithm {} not found, skipping", algo_id);
-        }
+
+        // 从已保存参数恢复状态
+        if (i < param_.algorithm_params.size() && !param_.algorithm_params[i].is_null())
+            algo->loadParams(param_.algorithm_params[i]);
+
+        algorithms_.push_back(std::move(algo));
     }
 
-    // 结果节点
-    process_nodes_.push_back(std::make_unique<ResultNode>(param_.comm_name));
-
-    // 构建 Taskflow DAG：算法1 -> 算法2 -> ... -> 结果
-    tf::Task prev;
-    for (size_t i = 0; i < process_nodes_.size(); ++i)
-    {
-        auto *node = process_nodes_[i].get();
-        auto task = taskflow_.emplace([node, this]()
-                                      {
-            if (!node->execute(ctx_)) {
-                spdlog::error("Node {} failed", node->name());
-            } })
-                        .name(node->name());
-
-        if (i > 0)
-        {
-            prev.precede(task);
-        }
-        prev = task;
-    }
-
-    spdlog::info("Pipeline {} built: 1 capture + {} process nodes",
-                 param_.name, process_nodes_.size());
+    spdlog::info("Pipeline {} built: {} algorithms", param_.name, algorithms_.size());
 }
 
 void InspectionPipeline::setOfflineImage(const HalconCpp::HObject &image)
@@ -74,7 +47,7 @@ bool InspectionPipeline::capture()
     ctx_.camera_name = param_.camera_name;
     ctx_.result.pass = true;
 
-    // 离线模式：直接使用注入的图像
+    // 离线模式
     if (offline_image_.IsInitialized())
     {
         ctx_.image = offline_image_;
@@ -83,16 +56,46 @@ bool InspectionPipeline::capture()
     }
 
     // 在线模式：从相机采集
-    if (!capture_node_ || !capture_node_->execute(ctx_))
+    auto *cam = CameraManager::getInstance().getCamera(param_.camera_name);
+    if (!cam)
     {
-        spdlog::error("Pipeline {}: capture failed", param_.name);
+        spdlog::error("Pipeline {}: camera {} not found", param_.name, param_.camera_name);
         return false;
     }
+    if (!cam->grabOne(ctx_.image))
+    {
+        spdlog::error("Pipeline {}: grabOne failed for {}", param_.name, param_.camera_name);
+        return false;
+    }
+    ctx_.display_image = ctx_.image;
     return true;
 }
 
-InspectionResult InspectionPipeline::process(tf::Executor &executor)
+InspectionResult InspectionPipeline::process()
 {
-    executor.run(taskflow_).wait();
+    // 顺序执行算法链
+    for (auto &algo : algorithms_)
+    {
+        if (!algo->process(ctx_))
+            spdlog::error("Algorithm {} failed", algo->name());
+    }
+
+    // 打时间戳
+    auto now = std::chrono::system_clock::now();
+    ctx_.result.timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   now.time_since_epoch())
+                                   .count();
+
+    spdlog::info("Pipeline {}: camera={} pass={} detail={}",
+                 param_.name, ctx_.camera_name, ctx_.result.pass, ctx_.result.detail);
+
     return ctx_.result;
+}
+
+std::vector<IAlgorithm *> InspectionPipeline::algorithms()
+{
+    std::vector<IAlgorithm *> ptrs;
+    for (auto &a : algorithms_)
+        ptrs.push_back(a.get());
+    return ptrs;
 }

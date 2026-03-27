@@ -30,7 +30,7 @@ void WorkflowManager::buildAll()
 {
     pipelines_.clear();
 
-    for (auto &wp : AppContext::getInstance().workflowParams())
+    for (auto &[cam_name, wp] : AppContext::getInstance().workflowParams())
     {
         auto state = std::make_unique<PipelineState>();
         state->param = wp;
@@ -126,16 +126,15 @@ void WorkflowManager::rebuildWorkflow(const std::string &camera_name)
         }
 
         // 从 AppContext 重新读取最新配置
-        for (auto &wp : AppContext::getInstance().workflowParams())
+        auto &wf_map = AppContext::getInstance().workflowParams();
+        auto wf_it = wf_map.find(camera_name);
+        if (wf_it != wf_map.end())
         {
-            if (wp.camera_name == camera_name)
-            {
-                state->param = wp;
-                state->pipeline = std::make_unique<InspectionPipeline>(wp);
-                state->pipeline->build();
-                SPDLOG_INFO("Workflow {} rebuilt: {} algorithms", name, wp.algorithm_ids.size());
-                break;
-            }
+            auto &wp = wf_it->second;
+            state->param = wp;
+            state->pipeline = std::make_unique<InspectionPipeline>(wp);
+            state->pipeline->build();
+            SPDLOG_INFO("Workflow {} rebuilt: {} algorithms", name, wp.algorithm_ids.size());
         }
         return;
     }
@@ -223,7 +222,7 @@ void WorkflowManager::executeWorkflow(const std::string &workflow_name)
     emit sign_frameCaptured(param.camera_name, ctx.image);
 
     // ── 执行算法链 ──
-    auto result = state->pipeline->process(executor_);
+    auto result = state->pipeline->process();
 
     SPDLOG_INFO("Workflow {} result: {}", workflow_name, result.pass ? "OK" : "NG");
     emit sign_inspectionFinished(workflow_name, param.camera_name, ctx.display_image, result);

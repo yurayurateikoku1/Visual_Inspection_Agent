@@ -79,6 +79,15 @@ namespace AIInfer
         cv::dnn::NMSBoxes(boxes, scores, conf_threshold, nms_threshold, indices);
     }
 
+    // 将 letterbox 旋转框坐标映射回原图
+    inline void scaleRotatedBoxToOriginal(cv::RotatedRect &rr, const LetterBoxInfo &info)
+    {
+        rr.center.x = (rr.center.x - info.pad_x) / info.scale;
+        rr.center.y = (rr.center.y - info.pad_y) / info.scale;
+        rr.size.width = rr.size.width / info.scale;
+        rr.size.height = rr.size.height / info.scale;
+    }
+
     // 随机颜色表，按类别索引取色
     static cv::Scalar getColor(int cls)
     {
@@ -146,8 +155,8 @@ namespace AIInfer
         }
     }
 
-    // 将 HWC BGR byte 数据转换为 NCHW RGB float 数据，
-    void fillNCHW(const uint8_t *src, float *dst, int h, int w, int c, bool normalize = true)
+    // 将 HWC BGR byte 数据转换为 NCHW RGB float 数据
+    inline void fillNCHW(const uint8_t *src, float *dst, int h, int w, int c, bool normalize = true)
     {
         int hw = h * w;
         float scale = normalize ? (1.0f / 255.0f) : 1.0f;
