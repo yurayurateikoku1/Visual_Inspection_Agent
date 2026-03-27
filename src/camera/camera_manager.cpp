@@ -6,14 +6,22 @@
 CameraManager::CameraManager()
     : QObject(nullptr)
 {
-    reconnect_timer_ = new QTimer(this);
-    reconnect_timer_->setInterval(RECONNECT_INTERVAL_MS);
-    connect(reconnect_timer_, &QTimer::timeout, this, &CameraManager::slot_reconnectTimer);
+    // ── 心跳定时器：周期性读寄存器，不枚举 ──
+    heartbeat_timer_ = new QTimer(this);
+    heartbeat_timer_->setInterval(HEARTBEAT_INTERVAL_MS);
+    connect(heartbeat_timer_, &QTimer::timeout, this, &CameraManager::slot_heartbeatTimer);
 
+    // ── 枚举定时器：单次触发，去抖合并多个枚举请求 ──
+    discovery_timer_ = new QTimer(this);
+    discovery_timer_->setSingleShot(true);
+    discovery_timer_->setInterval(DISCOVERY_DEBOUNCE_MS);
+    connect(discovery_timer_, &QTimer::timeout, this, &CameraManager::slot_doDiscovery);
+
+    // 程序启动时：第一次枚举（唯一允许的启动时枚举）
     enumAndOpenAll();
 
-    // 始终启动定时器：心跳检测在线相机 + 重新枚举发现新设备
-    reconnect_timer_->start();
+    // 启动心跳
+    heartbeat_timer_->start();
 }
 
 CameraManager &CameraManager::getInstance()
@@ -154,7 +162,8 @@ void CameraManager::openAll()
 
 void CameraManager::closeAll()
 {
-    reconnect_timer_->stop();
+    heartbeat_timer_->stop();
+    discovery_timer_->stop();
     offline_cameras_.clear();
 
     std::lock_guard lock(mutex_);
@@ -179,12 +188,59 @@ void CameraManager::markOffline(const std::string &camera_name)
     }
     offline_cameras_.insert(camera_name);
     emit sign_cameraStatusChanged(camera_name, false);
-    SPDLOG_INFO("Camera {} marked offline", camera_name);
+    SPDLOG_INFO("Camera {} marked offline, scheduling discovery", camera_name);
+
+    // 心跳失败/异常回调 → 触发一次枚举（去抖合并）
+    requestDiscovery();
 }
 
-void CameraManager::slot_reconnectTimer()
+void CameraManager::requestDiscovery()
 {
-    // 只枚举一次，结果用于：心跳检测、离线重连、新设备发现
+    // 去抖：多次请求合并为一次枚举
+    if (!discovery_timer_->isActive())
+    {
+        SPDLOG_INFO("Discovery requested, will execute in {}ms", DISCOVERY_DEBOUNCE_MS);
+        discovery_timer_->start();
+    }
+}
+
+// ── 心跳定时器：通过 Control Channel 读寄存器，不枚举 ──
+void CameraManager::slot_heartbeatTimer()
+{
+    std::vector<std::string> failed_cameras;
+
+    {
+        std::lock_guard lock(mutex_);
+        for (auto &[cam_name, cam] : cameras_)
+        {
+            // 跳过已知离线的相机
+            if (offline_cameras_.count(cam_name))
+                continue;
+
+            auto *hik_cam = dynamic_cast<HikCamera *>(cam.get());
+            if (!hik_cam || !hik_cam->isOpened())
+                continue;
+
+            // 心跳：读只读寄存器，走 Control Channel，不产生广播
+            if (!hik_cam->heartbeat())
+            {
+                SPDLOG_WARN("Camera {} heartbeat failed", cam_name);
+                failed_cameras.push_back(cam_name);
+            }
+        }
+    }
+
+    // 心跳失败的相机：标记离线（会自动触发枚举重连）
+    for (const auto &name : failed_cameras)
+    {
+        markOffline(name);
+    }
+}
+
+// ── 事件驱动的枚举：重连离线相机 + 发现新设备 ──
+void CameraManager::slot_doDiscovery()
+{
+    SPDLOG_INFO("Executing device discovery...");
     auto devices = HikCamera::enumDevices();
 
     // 构建 name → (dev_info*, ip) 映射
@@ -208,32 +264,9 @@ void CameraManager::slot_reconnectTimer()
         }
     }
 
-    // 收集状态变化，释放锁后再 emit
     std::vector<std::pair<std::string, bool>> status_changes;
 
-    // ── 1. 心跳检测：在线相机的 name 不在枚举结果中 → 掉线 ──
-    {
-        std::lock_guard lock(mutex_);
-        for (auto &[cam_name, cam] : cameras_)
-        {
-            if (offline_cameras_.count(cam_name))
-                continue;
-
-            auto *hik_cam = dynamic_cast<HikCamera *>(cam.get());
-            if (!hik_cam || !hik_cam->isOpened())
-                continue;
-
-            if (online_devs.find(hik_cam->config().name) == online_devs.end())
-            {
-                SPDLOG_WARN("Camera {} not found in enum, marking offline", cam_name);
-                hik_cam->forceClose();
-                offline_cameras_.insert(cam_name);
-                status_changes.emplace_back(cam_name, false);
-            }
-        }
-    }
-
-    // ── 2. 尝试重连离线相机（name 重新出现在枚举结果中才尝试） ──
+    // ── 1. 尝试重连离线相机（name 出现在枚举结果中才尝试） ──
     if (!offline_cameras_.empty())
     {
         auto to_reconnect = offline_cameras_;
@@ -258,46 +291,52 @@ void CameraManager::slot_reconnectTimer()
             }
             else
             {
-                SPDLOG_WARN("Camera {} reconnect failed, will retry", cam_name);
+                SPDLOG_WARN("Camera {} reconnect failed, will retry on next discovery", cam_name);
             }
         }
     }
 
-    // ── 3. 尝试打开配置中尚未管理的相机（启动时未连接，现在上线了） ──
+    // ── 2. 尝试打开配置中尚未管理的相机（启动时未连接，现在上线了） ──
+    for (auto &[cam_name, cfg] : AppContext::getInstance().cameraParams())
     {
-        for (auto &[cam_name, cfg] : AppContext::getInstance().cameraParams())
         {
-            {
-                std::lock_guard lock(mutex_);
-                if (cameras_.count(cam_name))
-                    continue;
-            }
-            if (offline_cameras_.count(cam_name))
+            std::lock_guard lock(mutex_);
+            if (cameras_.count(cam_name))
                 continue;
+        }
+        if (offline_cameras_.count(cam_name))
+            continue;
 
-            auto it = online_devs.find(cam_name);
-            if (it == online_devs.end())
-                continue;
+        auto it = online_devs.find(cam_name);
+        if (it == online_devs.end())
+            continue;
 
-            // 用枚举到的实际 IP 更新配置
-            cfg.ip = it->second.ip;
+        cfg.ip = it->second.ip;
 
-            if (addCamera(cfg, it->second.info))
+        if (addCamera(cfg, it->second.info))
+        {
+            auto *cam = getCamera(cam_name);
+            if (cam)
             {
-                auto *cam = getCamera(cam_name);
-                if (cam)
-                {
-                    cam->startGrabbing();
-                    status_changes.emplace_back(cam_name, true);
-                    SPDLOG_INFO("Camera {} (IP: {}) connected", cam_name, cfg.ip);
-                }
+                cam->startGrabbing();
+                status_changes.emplace_back(cam_name, true);
+                SPDLOG_INFO("Camera {} (IP: {}) connected via discovery", cam_name, cfg.ip);
             }
         }
     }
 
-    // ── 4. 释放锁，安全发送信号 ──
+    // ── 3. 安全发送信号 ──
     for (auto &[cam_name, online] : status_changes)
     {
         emit sign_cameraStatusChanged(cam_name, online);
+    }
+
+    // 如果还有离线相机未重连成功，定时重试枚举
+    if (!offline_cameras_.empty())
+    {
+        SPDLOG_INFO("{} camera(s) still offline, scheduling retry discovery in {}ms",
+                    offline_cameras_.size(), HEARTBEAT_INTERVAL_MS);
+        // 使用心跳间隔作为重试间隔
+        QTimer::singleShot(HEARTBEAT_INTERVAL_MS, this, &CameraManager::requestDiscovery);
     }
 }

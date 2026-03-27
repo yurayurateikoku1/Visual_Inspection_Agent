@@ -452,28 +452,26 @@ void __stdcall HikCamera::exceptionCallback(unsigned int msg_type, void *p_user)
     }
 }
 
-bool HikCamera::isAlive() const
+bool HikCamera::heartbeat() const
 {
     if (!handle_ || !opened_)
         return false;
-    // 通过枚举设备检查本相机 IP 是否仍在线（读参数可能返回缓存值，不可靠）
-    auto devices = enumDevices();
-    for (auto &dev : devices)
-    {
-        if (dev.nTLayerType == MV_GIGE_DEVICE)
-        {
-            auto &gige = dev.SpecialInfo.stGigEInfo;
-            char ip[32];
-            snprintf(ip, sizeof(ip), "%d.%d.%d.%d",
-                     (gige.nCurrentIp >> 24) & 0xFF,
-                     (gige.nCurrentIp >> 16) & 0xFF,
-                     (gige.nCurrentIp >> 8) & 0xFF,
-                     gige.nCurrentIp & 0xFF);
-            if (camera_param_.ip == ip)
-                return true;
-        }
-    }
-    return false;
+
+    // 通过 Control Channel 读取只读寄存器判断相机是否在线
+    // DeviceTemperature 是 GigE Vision 标准只读属性，读取走 GVCP ReadReg，不产生广播
+    MVCC_FLOATVALUE val{};
+    auto *self = const_cast<HikCamera *>(this);
+    std::lock_guard lock(self->handle_mutex_);
+    if (!self->handle_)
+        return false;
+
+    int ret = MV_CC_GetFloatValue(self->handle_, "DeviceTemperature", &val);
+    if (ret == MV_OK)
+        return true;
+
+    // 部分型号不支持 DeviceTemperature，回退读 ExposureTime（同样走 Control Channel）
+    ret = MV_CC_GetFloatValue(self->handle_, "ExposureTime", &val);
+    return ret == MV_OK;
 }
 
 bool HikCamera::reconnect()

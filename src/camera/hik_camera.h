@@ -117,9 +117,9 @@ public:
     /// @return true 重连成功
     bool reconnect();
 
-    /// @brief 检测相机是否仍然在线（通过枚举设备检查 IP 是否存在）
-    /// @return true 在线
-    bool isAlive() const;
+    /// @brief 心跳检测：通过 Control Channel 读取只读寄存器判断相机是否在线
+    /// @return true 在线（寄存器读取成功）
+    bool heartbeat() const;
 
     /// @brief 强制关闭（无论状态标记如何，强制关闭SDK 资源释放）
     void forceClose();
