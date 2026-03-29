@@ -63,7 +63,7 @@ void CameraManager::enumAndOpenAll()
     }
 
     // 按配置中的相机参数，根据 name 匹配枚举到的设备
-    for (auto &[cam_name, cfg] : AppContext::getInstance().cameraParams())
+    for (auto &[cam_name, cfg] : AppContext::getInstance().camera_params)
     {
         auto it = name_dev_map.find(cam_name);
         if (it == name_dev_map.end())
@@ -297,7 +297,7 @@ void CameraManager::slot_doDiscovery()
     }
 
     // ── 2. 尝试打开配置中尚未管理的相机（启动时未连接，现在上线了） ──
-    for (auto &[cam_name, cfg] : AppContext::getInstance().cameraParams())
+    for (auto &[cam_name, cfg] : AppContext::getInstance().camera_params)
     {
         {
             std::lock_guard lock(mutex_);

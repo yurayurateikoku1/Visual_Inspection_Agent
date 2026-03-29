@@ -19,7 +19,9 @@ WorkflowConfigDialog::WorkflowConfigDialog(WorkflowParam &param,
                                              QWidget *parent)
     : QDialog(parent), param_(param), view_(view)
 {
-    setWindowTitle(QStringLiteral("工作流配置 - %1").arg(QString::fromStdString(param_.name)));
+    setWindowTitle(QStringLiteral("工作流配置 - %1 DI%2")
+        .arg(QString::fromStdString(param_.camera_name))
+        .arg(param_.trigger.di_addr));
     setMinimumWidth(420);
     buildUi();
     loadToUi();
@@ -33,7 +35,6 @@ void WorkflowConfigDialog::buildUi()
     auto *grp_basic  = new QGroupBox(QStringLiteral("基本参数"), this);
     auto *form_basic = new QFormLayout(grp_basic);
 
-    edit_name_     = new QLineEdit(this);
     check_enabled_ = new QCheckBox(QStringLiteral("启用"), this);
     spin_di_addr_  = new QSpinBox(this);   spin_di_addr_->setRange(0, 3);
     spin_delay_ms_ = new QSpinBox(this);   spin_delay_ms_->setRange(0, 5000); spin_delay_ms_->setSuffix(" ms");
@@ -45,8 +46,7 @@ void WorkflowConfigDialog::buildUi()
     spin_exposure_->setSuffix(" us");
     spin_exposure_->setSpecialValueText(QStringLiteral("不覆盖"));
 
-    form_basic->addRow(QStringLiteral("名称"),     edit_name_);
-    form_basic->addRow(QString(),                  check_enabled_);
+    form_basic->addRow(QString(), check_enabled_);
     form_basic->addRow(QStringLiteral("DI 触发"),  spin_di_addr_);
     form_basic->addRow(QStringLiteral("触发延时"), spin_delay_ms_);
     form_basic->addRow(QStringLiteral("DO OK"),    spin_do_ok_);
@@ -113,13 +113,12 @@ void WorkflowConfigDialog::buildUi()
 
 void WorkflowConfigDialog::loadToUi()
 {
-    edit_name_->setText(QString::fromStdString(param_.name));
     check_enabled_->setChecked(param_.enabled);
-    spin_di_addr_->setValue(param_.trigger_di_addr);
-    spin_delay_ms_->setValue(param_.trigger_delay_ms);
-    spin_do_ok_->setValue(param_.do_ok_addr);
-    spin_do_ng_->setValue(param_.do_ng_addr);
-    spin_exposure_->setValue(param_.exposure_time <= 0 ? -1.0 : param_.exposure_time);
+    spin_di_addr_->setValue(param_.trigger.di_addr);
+    spin_delay_ms_->setValue(param_.trigger.delay_ms);
+    spin_do_ok_->setValue(param_.io.do_ok_addr);
+    spin_do_ng_->setValue(param_.io.do_ng_addr);
+    spin_exposure_->setValue(param_.camera_override.exposure_time <= 0 ? -1.0 : param_.camera_override.exposure_time);
 
     check_roi_->setChecked(param_.roi.enabled);
     spin_row1_->setValue(param_.roi.row1);
@@ -127,23 +126,23 @@ void WorkflowConfigDialog::loadToUi()
     spin_row2_->setValue(param_.roi.row2);
     spin_col2_->setValue(param_.roi.col2);
 
-    check_yolo_->setChecked(param_.yolo.enabled);
-    edit_model_->setText(QString::fromStdString(param_.yolo.model_path));
-    spin_score_->setValue(param_.yolo.score_threshold);
-    spin_nms_->setValue(param_.yolo.nms_threshold);
-    combo_task_->setCurrentText(QString::fromStdString(param_.yolo.task_type));
-    check_e2e_->setChecked(param_.yolo.end2end);
+    const auto *tp = std::get_if<TerminalParam>(&param_.detector_param);
+    check_yolo_->setChecked(tp != nullptr && tp->enabled);
+    edit_model_->setText(tp ? QString::fromStdString(tp->model_path) : QString());
+    spin_score_->setValue(tp ? tp->score_threshold : 0.5);
+    spin_nms_->setValue(tp ? tp->nms_threshold : 0.5);
+    combo_task_->setCurrentText(tp ? QString::fromStdString(tp->task_type) : QStringLiteral("YOLO_DET"));
+    check_e2e_->setChecked(tp && tp->end2end);
 }
 
 void WorkflowConfigDialog::saveFromUi()
 {
-    param_.name             = edit_name_->text().toStdString();
     param_.enabled          = check_enabled_->isChecked();
-    param_.trigger_di_addr  = static_cast<uint16_t>(spin_di_addr_->value());
-    param_.trigger_delay_ms = spin_delay_ms_->value();
-    param_.do_ok_addr       = static_cast<uint16_t>(spin_do_ok_->value());
-    param_.do_ng_addr       = static_cast<uint16_t>(spin_do_ng_->value());
-    param_.exposure_time    = static_cast<float>(spin_exposure_->value());
+    param_.trigger.di_addr  = static_cast<uint16_t>(spin_di_addr_->value());
+    param_.trigger.delay_ms = spin_delay_ms_->value();
+    param_.io.do_ok_addr       = static_cast<uint16_t>(spin_do_ok_->value());
+    param_.io.do_ng_addr       = static_cast<uint16_t>(spin_do_ng_->value());
+    param_.camera_override.exposure_time    = static_cast<float>(spin_exposure_->value());
 
     param_.roi.enabled = check_roi_->isChecked();
     param_.roi.row1    = spin_row1_->value();
@@ -151,12 +150,21 @@ void WorkflowConfigDialog::saveFromUi()
     param_.roi.row2    = spin_row2_->value();
     param_.roi.col2    = spin_col2_->value();
 
-    param_.yolo.enabled          = check_yolo_->isChecked();
-    param_.yolo.model_path       = edit_model_->text().toStdString();
-    param_.yolo.score_threshold  = static_cast<float>(spin_score_->value());
-    param_.yolo.nms_threshold    = static_cast<float>(spin_nms_->value());
-    param_.yolo.task_type        = combo_task_->currentText().toStdString();
-    param_.yolo.end2end          = check_e2e_->isChecked();
+    if (check_yolo_->isChecked() || std::holds_alternative<TerminalParam>(param_.detector_param))
+    {
+        TerminalParam tp;
+        tp.enabled         = check_yolo_->isChecked();
+        tp.model_path      = edit_model_->text().toStdString();
+        tp.score_threshold = static_cast<float>(spin_score_->value());
+        tp.nms_threshold   = static_cast<float>(spin_nms_->value());
+        tp.task_type       = combo_task_->currentText().toStdString();
+        tp.end2end         = check_e2e_->isChecked();
+        param_.detector_param = tp;
+    }
+    else
+    {
+        param_.detector_param = std::monostate{};
+    }
 }
 
 void WorkflowConfigDialog::onDrawRoi()

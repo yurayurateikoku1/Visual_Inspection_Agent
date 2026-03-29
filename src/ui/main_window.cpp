@@ -26,12 +26,12 @@ MainWindow::MainWindow(QWidget *parent)
     camera_layout_->setContentsMargins(4, 4, 4, 4);
     camera_layout_->setSpacing(4);
 
-    ioparam_dialog_      = new IOParamDialog(this);
+    ioparam_dialog_ = new IOParamDialog(this);
     camera_param_dialog_ = new CameraParamDialog(this);
 
     // 右侧面板：工作流配置 + 操作面板
-    workflow_view_widget_   = new WorkflowViewWidget(ui->widget_region_operation);
-    operation_view_widget_  = new OperationViewWidget(ui->widget_region_operation);
+    workflow_view_widget_ = new WorkflowViewWidget(ui->widget_region_operation);
+    operation_view_widget_ = new OperationViewWidget(ui->widget_region_operation);
 
     auto *op_layout = new QVBoxLayout(ui->widget_region_operation);
     op_layout->setContentsMargins(0, 0, 0, 0);
@@ -40,14 +40,18 @@ MainWindow::MainWindow(QWidget *parent)
     op_layout->addWidget(operation_view_widget_, 1);
 
     workflow_view_widget_->setCameraViewFinder([this](const std::string &name) -> CameraViewWidget *
-    {
-        auto it = camera_views_.find(name);
-        return it != camera_views_.end() ? it->second : nullptr;
-    });
+                                               {
+        for (auto *v : camera_view_list_)
+            if (v->cameraName() == name) return v;
+        return nullptr; });
 
-    // 用户选中某条 workflow → 更新 selected_workflow_ 缓存
-    connect(workflow_view_widget_, &WorkflowViewWidget::workflowSelected,
-            this, &MainWindow::slot_onWorkflowSelected);
+    // 用户选中某条 workflow → 更新 selectedWorkflows 缓存
+    connect(workflow_view_widget_, &WorkflowViewWidget::workflowSelected, this,
+            [](const std::string &camera_name, const std::string &workflow_name)
+            {
+                AppContext::getInstance().selected_workflows[camera_name] = workflow_name;
+                SPDLOG_INFO("Selected workflow: camera={} wf={}", camera_name, workflow_name);
+            });
 
     // 用户在 Dialog 中修改参数 → 重建对应 Pipeline
     connect(workflow_view_widget_, &WorkflowViewWidget::workflowConfigChanged,
@@ -57,35 +61,9 @@ MainWindow::MainWindow(QWidget *parent)
     // rebuild 失败（workflow 忙碌）→ 提示用户
     connect(&WorkflowManager::getInstance(), &WorkflowManager::sign_rebuildFailed,
             this, [this](const std::string &wf_name)
-            {
-                QMessageBox::warning(this, QStringLiteral("配置未生效"),
-                    QStringLiteral("工作流 "%1" 正在运行中，参数将在本次检测完成后生效。\n如需立即生效请停止自动检测后重试。")
-                        .arg(QString::fromStdString(wf_name)));
-            });
-
-    // 相机热插拔状态变化
-    auto &mgr = CameraManager::getInstance();
-    connect(&mgr, &CameraManager::sign_cameraStatusChanged, this,
-            [this](const std::string &cam_name, bool online)
-            {
-                if (camera_views_.find(cam_name) == camera_views_.end())
-                    addCameraUI(cam_name);
-
-                if (online)
-                {
-                    auto *cam = CameraManager::getInstance().getCamera(cam_name);
-                    auto vit  = camera_views_.find(cam_name);
-                    if (cam && vit != camera_views_.end())
-                        cam->setCallback(vit->second);
-                }
-
-                auto it = camera_views_.find(cam_name);
-                if (it != camera_views_.end())
-                    it->second->setStatus(online ? QStringLiteral("在线") : QStringLiteral("离线"));
-
-                setCameraLed(cam_name, online);
-                if (online) SPDLOG_INFO("Camera {} online", cam_name);
-            });
+            { QMessageBox::warning(this, QStringLiteral("配置未生效"),
+                                   QStringLiteral("工作流 \"%1\" 正在运行中，参数将在本次检测完成后生效。\n如需立即生效请停止自动检测后重试。")
+                                       .arg(QString::fromStdString(wf_name))); });
 
     initCameras();
     initModbusCommunication();
@@ -103,59 +81,69 @@ MainWindow::~MainWindow()
 
 void MainWindow::initCameras()
 {
-    for (auto &[name, _] : AppContext::getInstance().cameraParams())
+    for (auto &[name, _] : AppContext::getInstance().camera_params)
         addCameraUI(name);
-
-    auto &mgr = CameraManager::getInstance();
-    for (auto &cam_name : mgr.cameraNames())
-    {
-        auto *cam = mgr.getCamera(cam_name);
-        auto vit  = camera_views_.find(cam_name);
-        if (cam && vit != camera_views_.end())
-            cam->setCallback(vit->second);
-    }
 
     layoutCameraViews();
 
     if (!camera_view_list_.empty())
-        slot_cameraSelected(camera_view_list_.front()->cameraName());
+    {
+        const auto &name = camera_view_list_.front()->cameraName();
+        AppContext::getInstance().selected_camera_name = name;
+        workflow_view_widget_->loadWorkflow(name);
+    }
 }
 
 void MainWindow::addCameraUI(const std::string &cam_name)
 {
-    if (camera_views_.count(cam_name))
-        return;
+    for (auto *v : camera_view_list_)
+        if (v->cameraName() == cam_name)
+            return;
 
     auto *view = new CameraViewWidget(cam_name, ui->widget_region_camera);
-    camera_views_[cam_name] = view;
     camera_view_list_.push_back(view);
 
-    connect(view, &CameraViewWidget::maximizeRequested,
-            this, &MainWindow::slot_cameraMaximizeRequested);
-    connect(view, &CameraViewWidget::selected,
-            this, &MainWindow::slot_cameraSelected);
-    connect(view, &CameraViewWidget::cameraError,
-            this, &MainWindow::slot_onCameraError);
+    connect(view, &CameraViewWidget::maximizeRequested, this,
+            [this](const std::string &name)
+            {
+                if (maximized_camera_name_.empty())
+                {
+                    maximized_camera_name_ = name;
+                    for (auto *v : camera_view_list_)
+                        if (v->cameraName() != name)
+                            v->hide();
+                }
+                else
+                {
+                    maximized_camera_name_.clear();
+                    for (auto *v : camera_view_list_)
+                        v->show();
+                }
+            });
+
+    connect(view, &CameraViewWidget::selected, this,
+            [this](const std::string &name)
+            {
+                AppContext::getInstance().selected_camera_name = name;
+                workflow_view_widget_->loadWorkflow(name);
+                auto it = AppContext::getInstance().selected_workflows.find(name);
+                if (it != AppContext::getInstance().selected_workflows.end())
+                    workflow_view_widget_->setSelectedWorkflow(it->second);
+            });
+
+    connect(view, &CameraViewWidget::cameraError, this,
+            [](const std::string &name, int /*code*/)
+            { CameraManager::getInstance().markOffline(name); });
 
     // 帧直接投递到 WorkflowManager，不经过 MainWindow
     connect(view, &CameraViewWidget::frameArrived,
             &WorkflowManager::getInstance(), &WorkflowManager::onFrameArrived);
 
-    auto *cam   = CameraManager::getInstance().getCamera(cam_name);
+    auto *cam = CameraManager::getInstance().getCamera(cam_name);
     bool online = cam && cam->isOpened();
     if (cam)
         cam->setCallback(view);
-
     view->setStatus(online ? QStringLiteral("在线") : QStringLiteral("离线"));
-
-    if (camera_status_leds_.find(cam_name) == camera_status_leds_.end())
-    {
-        ui->statusbar->addPermanentWidget(new QLabel(QString::fromStdString(cam_name), this));
-        auto *led = new QLabel(this);
-        led->setPixmap(QPixmap(online ? ":/assets/zhuangtaideng1.png" : ":/assets/zhuangtaideng0.png"));
-        ui->statusbar->addPermanentWidget(led);
-        camera_status_leds_[cam_name] = led;
-    }
 
     layoutCameraViews();
 }
@@ -186,9 +174,12 @@ void MainWindow::initWorkflow()
     connect(&wfm, &WorkflowManager::sign_frameCaptured, this,
             [this](const std::string &camera_name, const HalconCpp::HObject &image)
             {
-                auto it = camera_views_.find(camera_name);
-                if (it != camera_views_.end())
-                    it->second->updateFrame(image);
+                for (auto *v : camera_view_list_)
+                    if (v->cameraName() == camera_name)
+                    {
+                        v->updateFrame(image);
+                        break;
+                    }
             });
 
     // 检测完成 → 显示叠加结果图
@@ -196,9 +187,12 @@ void MainWindow::initWorkflow()
             [this](const std::string &, const std::string &camera_name,
                    const HalconCpp::HObject &display_image, const InspectionResult &result)
             {
-                auto it = camera_views_.find(camera_name);
-                if (it != camera_views_.end())
-                    it->second->updateFrame(display_image);
+                for (auto *v : camera_view_list_)
+                    if (v->cameraName() == camera_name)
+                    {
+                        v->updateFrame(display_image);
+                        break;
+                    }
                 SPDLOG_INFO("Inspection: camera={} pass={}", camera_name, result.pass);
             });
 
@@ -208,7 +202,7 @@ void MainWindow::initWorkflow()
 void MainWindow::initStatusBar()
 {
     auto &comm_mgr = CommManager::getInstance();
-    for (auto &[name, _] : AppContext::getInstance().commParams())
+    for (auto &[name, _] : AppContext::getInstance().comm_params)
     {
         ui->statusbar->addPermanentWidget(new QLabel(QString::fromStdString(name), this));
         auto *led = new QLabel(this);
@@ -223,9 +217,11 @@ void MainWindow::initStatusBar()
     ui->statusbar->addPermanentWidget(light_status_led_);
 
     connect(&comm_mgr, &CommManager::sign_commStatusChanged, this,
-            [this](const std::string &name, bool connected) { setCommLed(name, connected); });
+            [this](const std::string &name, bool connected)
+            { setCommLed(name, connected); });
     connect(&comm_mgr, &CommManager::sign_lightStatusChanged, this,
-            [this](bool connected) { setLightLed(connected); });
+            [this](bool connected)
+            { setLightLed(connected); });
 }
 
 void MainWindow::on_action_parameter_triggered()
@@ -270,31 +266,38 @@ void MainWindow::runOfflineTest(const QString &image_path)
         HalconCpp::ReadImage(&image, image_path.toStdString().c_str());
 
         // 找当前相机选中的 workflow
-        auto sel_it = selected_workflow_.find(selected_camera_name_);
-        if (sel_it == selected_workflow_.end())
+        auto sel_it = AppContext::getInstance().selected_workflows.find(AppContext::getInstance().selected_camera_name);
+        if (sel_it == AppContext::getInstance().selected_workflows.end())
         {
             // 没有选中 workflow，只显示图像
-            auto vit = camera_views_.find(selected_camera_name_);
-            if (vit != camera_views_.end())
-                vit->second->updateFrame(image);
+            for (auto *v : camera_view_list_)
+                if (v->cameraName() == AppContext::getInstance().selected_camera_name)
+                {
+                    v->updateFrame(image);
+                    break;
+                }
             return;
         }
 
         const std::string &wf_name = sel_it->second;
 
         // 更新画面
-        auto &wfParams = AppContext::getInstance().workflowParams();
+        auto &wfParams = AppContext::getInstance().workflow_params;
         auto wf_it = wfParams.find(wf_name);
         if (wf_it != wfParams.end())
         {
-            auto vit = camera_views_.find(wf_it->second.camera_name);
-            if (vit != camera_views_.end())
-                vit->second->updateFrame(image);
+            const auto &cname = wf_it->second.camera_name;
+            for (auto *v : camera_view_list_)
+                if (v->cameraName() == cname)
+                {
+                    v->updateFrame(image);
+                    break;
+                }
         }
 
         // 注入帧并触发检测
         auto &wfm = WorkflowManager::getInstance();
-        wfm.onFrameArrived(selected_camera_name_, image); // 更新帧缓存
+        wfm.onFrameArrived(AppContext::getInstance().selected_camera_name, image); // 更新帧缓存
         wfm.triggerOnce(wf_name);
 
         SPDLOG_INFO("Offline test [{}/{}]: {} → {}",
@@ -307,53 +310,6 @@ void MainWindow::runOfflineTest(const QString &image_path)
         QMessageBox::warning(this, QStringLiteral("错误"),
                              QStringLiteral("无法读取图片: %1").arg(image_path));
     }
-}
-
-void MainWindow::slot_cameraSelected(const std::string &camera_name)
-{
-    selected_camera_name_ = camera_name;
-    workflow_view_widget_->loadWorkflow(camera_name);
-
-    // 恢复该相机上次选中的 workflow 高亮
-    auto it = selected_workflow_.find(camera_name);
-    if (it != selected_workflow_.end())
-        workflow_view_widget_->setSelectedWorkflow(it->second);
-}
-
-void MainWindow::slot_onWorkflowSelected(const std::string &camera_name,
-                                          const std::string &workflow_name)
-{
-    selected_workflow_[camera_name] = workflow_name;
-    SPDLOG_INFO("Selected workflow: camera={} wf={}", camera_name, workflow_name);
-}
-
-void MainWindow::slot_cameraMaximizeRequested(const std::string &camera_name)
-{
-    if (maximized_camera_name_.empty())
-    {
-        maximized_camera_name_ = camera_name;
-        for (auto *view : camera_view_list_)
-            if (view->cameraName() != camera_name)
-                view->hide();
-    }
-    else
-    {
-        maximized_camera_name_.clear();
-        for (auto *view : camera_view_list_)
-            view->show();
-    }
-}
-
-void MainWindow::slot_onCameraError(const std::string &camera_name, int /*error_code*/)
-{
-    CameraManager::getInstance().markOffline(camera_name);
-}
-
-void MainWindow::setCameraLed(const std::string &camera_name, bool online)
-{
-    auto it = camera_status_leds_.find(camera_name);
-    if (it != camera_status_leds_.end())
-        it->second->setPixmap(QPixmap(online ? ":/assets/zhuangtaideng1.png" : ":/assets/zhuangtaideng0.png"));
 }
 
 void MainWindow::setCommLed(const std::string &comm_name, bool connected)
@@ -372,7 +328,7 @@ void MainWindow::setLightLed(bool connected)
 void MainWindow::initModbusCommunication()
 {
     auto &mgr = CommManager::getInstance();
-    for (auto &[name, comm_cfg] : AppContext::getInstance().commParams())
+    for (auto &[name, comm_cfg] : AppContext::getInstance().comm_params)
     {
         QMetaObject::invokeMethod(&mgr, [&mgr, comm_cfg]()
                                   { mgr.addComm(comm_cfg); }, Qt::QueuedConnection);

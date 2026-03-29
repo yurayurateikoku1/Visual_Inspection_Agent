@@ -39,14 +39,13 @@ AppContext::AppContext()
 
     // ── 默认工作流参数 ──
     WorkflowParam wf1;
-    wf1.name = "wf_1";
-    wf1.camera_name = "ccd1";
-    wf1.comm_name = "plc_1";
-    wf1.trigger_di_addr = 0;
-    wf1.trigger_delay_ms = 0;
-    wf1.do_ok_addr = 500;
-    wf1.do_ng_addr = 501;
-    wf1.result_hold_ms = 100;
-    wf1.exposure_time = -1.0f;
-    workflow_params_[wf1.camera_name] = wf1;
+    wf1.camera_name     = "ccd1";
+    wf1.comm_name       = "plc_1";
+    wf1.trigger.di_addr = 0;
+    wf1.trigger.delay_ms = 0;
+    wf1.io.do_ok_addr      = 500;
+    wf1.io.do_ng_addr      = 501;
+    wf1.io.result_hold_ms  = 100;
+    wf1.camera_override.exposure_time   = -1.0f;
+    workflow_params[wf1.key()] = wf1;
 }

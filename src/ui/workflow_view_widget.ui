@@ -3,71 +3,35 @@
  <class>WorkflowViewWidget</class>
  <widget class="QWidget" name="WorkflowViewWidget">
   <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>308</width>
-    <height>200</height>
-   </rect>
+   <rect><x>0</x><y>0</y><width>308</width><height>200</height></rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
-   <property name="spacing">
-    <number>2</number>
-   </property>
-   <property name="leftMargin">
-    <number>0</number>
-   </property>
-   <property name="topMargin">
-    <number>0</number>
-   </property>
-   <property name="rightMargin">
-    <number>0</number>
-   </property>
-   <property name="bottomMargin">
-    <number>0</number>
-   </property>
+   <property name="spacing"><number>2</number></property>
+   <property name="leftMargin"><number>0</number></property>
+   <property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property>
+   <property name="bottomMargin"><number>0</number></property>
    <item>
     <widget class="QLabel" name="label_camera">
      <property name="font">
-      <font>
-       <pointsize>11</pointsize>
-       <bold>true</bold>
-      </font>
+      <font><pointsize>11</pointsize><bold>true</bold></font>
      </property>
-     <property name="text">
-      <string>未选择相机</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignmentFlag::AlignCenter</set>
-     </property>
+     <property name="text"><string>未选择相机</string></property>
+     <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
     </widget>
    </item>
    <item>
-    <widget class="QTableWidget" name="tableWidget_workflows">
-     <property name="selectionBehavior">
-      <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
-     </property>
+    <widget class="QListWidget" name="listWidget_workflows">
      <property name="selectionMode">
       <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
      </property>
      <property name="editTriggers">
       <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
      </property>
-     <property name="alternatingRowColors">
-      <bool>true</bool>
+     <property name="alternatingRowColors"><bool>true</bool></property>
+     <property name="verticalScrollBarPolicy">
+      <enum>Qt::ScrollBarPolicy::ScrollBarAsNeeded</enum>
      </property>
-     <column>
-      <property name="text"><string>DI</string></property>
-     </column>
-     <column>
-      <property name="text"><string>名称</string></property>
-     </column>
-     <column>
-      <property name="text"><string>启用</string></property>
-     </column>
-     <column>
-      <property name="text"><string>操作</string></property>
-     </column>
     </widget>
    </item>
   </layout>

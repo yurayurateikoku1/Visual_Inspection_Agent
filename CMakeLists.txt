@@ -58,6 +58,7 @@ set(PROJECT_SOURCES
     src/ui/camera_view_widget.h src/ui/camera_view_widget.cpp src/ui/camera_view_widget.ui
     src/ui/camera_param_dialog.h src/ui/camera_param_dialog.cpp src/ui/camera_param_dialog.ui
     src/ui/workflow_view_widget.h src/ui/workflow_view_widget.cpp src/ui/workflow_view_widget.ui
+    src/ui/workflow_row_widget.h src/ui/workflow_row_widget.cpp src/ui/workflow_row_widget.ui
     src/ui/workflow_config_dialog.h src/ui/workflow_config_dialog.cpp
     src/ui/operation_view_widget.h src/ui/operation_view_widget.cpp src/ui/operation_view_widget.ui
     src/ui/terminal_settings_dialog.h src/ui/terminal_settings_dialog.cpp src/ui/terminal_settings_dialog.ui
@@ -76,7 +77,8 @@ set(PROJECT_SOURCES
 
     # workflow
     src/workflow/workflow_manager.h      src/workflow/workflow_manager.cpp
-    src/workflow/inspection_pipeline.h   src/workflow/inspection_pipeline.cpp
+    src/algorithm/idetector.h
+    src/algorithm/terminal_detector.h   src/algorithm/terminal_detector.cpp
 
     # ai_infer
     src/ai_infer/ai_utils.h  src/ai_infer/ai_common.h     src/ai_infer/infer_backend.h

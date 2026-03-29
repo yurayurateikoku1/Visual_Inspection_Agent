@@ -49,7 +49,7 @@ void IOParamDialog::showEvent(QShowEvent *event)
 void IOParamDialog::loadParam()
 {
     // ── 通信参数 ──
-    auto &cfgs = AppContext::getInstance().commParams();
+    auto &cfgs = AppContext::getInstance().comm_params;
     if (!cfgs.empty())
     {
         auto &cfg = cfgs.begin()->second;
@@ -65,7 +65,7 @@ void IOParamDialog::loadParam()
     }
 
     // ── 光源参数
-    auto &lp = AppContext::getInstance().lightParam();
+    auto &lp = AppContext::getInstance().light_param;
     ui->spinBox_lightPort->setValue(
         lp.serial_port.size() > 3 ? std::stoi(lp.serial_port.substr(3)) : 1);
     ui->spinBox_ch1Brightness->setValue(lp.luminance[0]);
@@ -80,7 +80,7 @@ void IOParamDialog::saveParam()
     auto &ctx = AppContext::getInstance();
 
     // ── 通信参数 ──
-    auto &cfgs = ctx.commParams();
+    auto &cfgs = ctx.comm_params;
     if (cfgs.empty())
     {
         CommunicationParam cp;
@@ -94,7 +94,7 @@ void IOParamDialog::saveParam()
     cfg.protocol = ui->radioButton_rtu->isChecked() ? CommProtocol::ModbusRTU : CommProtocol::ModbusTCP;
 
     // ── 光源参数
-    auto &lp = ctx.lightParam();
+    auto &lp = ctx.light_param;
     lp.serial_port = "COM" + std::to_string(ui->spinBox_lightPort->value());
     lp.luminance[0] = ui->spinBox_ch1Brightness->value();
     lp.luminance[1] = ui->spinBox_ch2Brightness->value();
@@ -137,7 +137,7 @@ void IOParamDialog::slot_doCheckBoxClicked(int index, bool checked)
 
 void IOParamDialog::writeLuminance()
 {
-    auto &lp = AppContext::getInstance().lightParam();
+    auto &lp = AppContext::getInstance().light_param;
     auto &mgr = CommManager::getInstance();
 
     if (lp.use_modbus)

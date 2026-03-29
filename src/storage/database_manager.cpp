@@ -35,13 +35,12 @@ void DatabaseManager::createTables()
     QSqlQuery q(db_);
     q.exec(R"(
         CREATE TABLE IF NOT EXISTS inspection_results (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            camera_name   TEXT NOT NULL,
-            pass        INTEGER NOT NULL,
-            detail      TEXT,
-            confidence  REAL,
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            camera_name  TEXT NOT NULL,
+            pass         INTEGER NOT NULL,
+            defects      TEXT,
             timestamp_ms INTEGER NOT NULL,
-            image_path  TEXT
+            image_path   TEXT
         )
     )");
     q.exec("CREATE INDEX IF NOT EXISTS idx_timestamp ON inspection_results(timestamp_ms)");
@@ -50,16 +49,28 @@ void DatabaseManager::createTables()
 
 bool DatabaseManager::saveResult(const std::string &camera_name, const InspectionResult &result)
 {
+    // Serialize defects as simple CSV: "label,conf,r1,c1,r2,c2|..."
+    std::string defects_str;
+    for (const auto &d : result.defects)
+    {
+        if (!defects_str.empty()) defects_str += "|";
+        defects_str += d.label + "," +
+                       std::to_string(d.confidence) + "," +
+                       std::to_string(d.row1) + "," +
+                       std::to_string(d.col1) + "," +
+                       std::to_string(d.row2) + "," +
+                       std::to_string(d.col2);
+    }
+
     std::lock_guard lock(mutex_);
     QSqlQuery q(db_);
     q.prepare(R"(
-        INSERT INTO inspection_results (camera_name, pass, detail, confidence, timestamp_ms)
-        VALUES (:cam, :pass, :detail, :conf, :ts)
+        INSERT INTO inspection_results (camera_name, pass, defects, timestamp_ms)
+        VALUES (:cam, :pass, :defects, :ts)
     )");
     q.bindValue(":cam", QString::fromStdString(camera_name));
     q.bindValue(":pass", result.pass ? 1 : 0);
-    q.bindValue(":detail", QString::fromStdString(result.detail));
-    q.bindValue(":conf", result.confidence);
+    q.bindValue(":defects", QString::fromStdString(defects_str));
     q.bindValue(":ts", static_cast<qint64>(result.timestamp_ms));
 
     if (!q.exec())

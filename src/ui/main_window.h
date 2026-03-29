@@ -31,10 +31,6 @@ private slots:
     void on_action_parameter_triggered();
     void on_action_camera_triggered();
     void on_action_open_folder_triggered();
-    void slot_cameraMaximizeRequested(const std::string &camera_name);
-    void slot_cameraSelected(const std::string &camera_name);
-    void slot_onCameraError(const std::string &camera_name, int error_code);
-    void slot_onWorkflowSelected(const std::string &camera_name, const std::string &workflow_name);
 
 private:
     void initCameras();
@@ -43,29 +39,21 @@ private:
     void initModbusCommunication();
     void initWorkflow();
     void initStatusBar();
-    void setCameraLed(const std::string &camera_name, bool online);
     void setCommLed(const std::string &comm_name, bool connected);
     void setLightLed(bool connected);
     void runOfflineTest(const QString &image_path);
 
     Ui::MainWindow *ui;
-    QGridLayout *camera_layout_ = nullptr;
-    std::map<std::string, CameraViewWidget *> camera_views_;
-    std::vector<CameraViewWidget *> camera_view_list_;
-    std::string maximized_camera_name_;
-    std::map<std::string, QLabel *> camera_status_leds_;
-    std::map<std::string, QLabel *> comm_status_leds_;
-    QLabel *light_status_led_ = nullptr;
+    QGridLayout *camera_layout_ = nullptr;          ///< 相机画面区域的网格布局（最多2×2）
+    std::vector<CameraViewWidget *> camera_view_list_; ///< 所有相机视图，按添加顺序排列，用于布局和按名查找
+    std::string maximized_camera_name_;             ///< 当前全屏相机名，空字符串表示网格模式
+    std::map<std::string, QLabel *> comm_status_leds_;   ///< 状态栏通信通道连接指示灯（comm_name → led）
+    QLabel *light_status_led_ = nullptr;            ///< 状态栏光源控制器连接指示灯
 
     IOParamDialog *ioparam_dialog_               = nullptr;
     CameraParamDialog *camera_param_dialog_      = nullptr;
     WorkflowViewWidget *workflow_view_widget_    = nullptr;
     OperationViewWidget *operation_view_widget_  = nullptr;
-
-    std::string selected_camera_name_;
-
-    /// camera_name → 当前选中的 workflow_name（离线测试用）
-    std::map<std::string, std::string> selected_workflow_;
 
     std::vector<QString> offline_image_paths_;
     int offline_image_index_ = 0;

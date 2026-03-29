@@ -18,6 +18,19 @@ CameraViewWidget::CameraViewWidget(const std::string &camera_name, QWidget *pare
     ui->widget_window->setMinimumSize(320, 240);
     ui->widget_window->setStyleSheet("background-color: #1e1e1e;");
     ui->widget_window->setAttribute(Qt::WA_NativeWindow);
+
+    // 监听相机在线状态，自行更新状态显示和回调注册
+    connect(&CameraManager::getInstance(), &CameraManager::sign_cameraStatusChanged,
+            this, [this](const std::string &name, bool online)
+            {
+                if (name != camera_name_) return;
+                setStatus(online ? QStringLiteral("在线") : QStringLiteral("离线"));
+                if (online)
+                {
+                    auto *cam = CameraManager::getInstance().getCamera(name);
+                    if (cam) cam->setCallback(this);
+                }
+            });
 }
 
 CameraViewWidget::~CameraViewWidget()

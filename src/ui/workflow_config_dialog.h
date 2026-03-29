@@ -35,7 +35,6 @@ private:
     CameraViewWidget *view_;
 
     // 基本参数
-    QLineEdit    *edit_name_         = nullptr;
     QCheckBox    *check_enabled_     = nullptr;
     QSpinBox     *spin_di_addr_      = nullptr;
     QSpinBox     *spin_delay_ms_     = nullptr;

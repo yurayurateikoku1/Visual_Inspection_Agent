@@ -7,17 +7,27 @@
 #include <cstdint>
 #include <any>
 #include <map>
+#include <variant>
 #include <spdlog/spdlog.h>
 #include <nlohmann/json.hpp>
 #include <halconcpp/HalconCpp.h>
 
 using json = nlohmann::json;
 
+/// @brief 单个缺陷（检测器负责填充）
+struct Defect
+{
+    std::string label; // 缺陷类型，如 "missing", "offset"
+    float confidence = 0.0f;
+    // 位置：矩形框 [row1, col1, row2, col2]
+    float row1 = 0, col1 = 0, row2 = 0, col2 = 0;
+};
+
+/// @brief 检测结果
 struct InspectionResult
 {
     bool pass = true;
-    std::string detail;
-    double confidence = 0.0;
+    std::vector<Defect> defects; // 具体缺陷列表，pass 由检测器根据业务规则判断
     int64_t timestamp_ms = 0;
 };
 
@@ -87,44 +97,70 @@ struct LightParam
     bool use_modbus = false;          // true=通过Modbus/PLC控制, false=串口直接控制（对应C# cbGYTX）
 };
 
+enum class DetectorType
+{
+    None,
+    Terminal,
+};
+
+/// @brief 端子检测参数
+struct TerminalParam
+{
+    bool enabled = false;
+    std::string model_path;
+    float score_threshold = 0.5f;
+    float nms_threshold = 0.5f;
+    std::string task_type = "YOLO_DET"; // "YOLO_DET" | "YOLO_OBB"
+    bool end2end = false;
+};
+
 /// @brief 工作流参数（每个相机最多4条，对应 DI0~DI3 触发，每条独立算法链）
 ///        参照 C# MainTask 状态机：DI触发 → 软触发拍照 → 算法检测 → DO输出结果
-struct WorkflowParam
+
+/// @brief DI 触发配置
+struct TriggerConfig
 {
-    std::string name;        // 名称，如 "wf_ccd1_0"
-    std::string camera_name; // 绑定的相机名称
-    std::string comm_name;   // 绑定的通信通道名称
-    bool enabled = false;    // 是否启用此条工作流
+    uint16_t di_addr = 0; // 触发 DI 线圈地址（0~3）
+    int delay_ms = 0;     // 触发后延时
+};
 
-    // DI 触发配置
-    uint16_t trigger_di_addr = 0; // 触发信号的 DI 线圈地址（0~3）
-    int trigger_delay_ms = 0;     // 触发后延时（ms）
-
-    // DO 输出配置
+/// @brief DO 输出配置
+struct IoConfig
+{
     uint16_t do_ok_addr = 500;
     uint16_t do_ng_addr = 501;
     int result_hold_ms = 100;
+};
 
-    // 相机参数覆盖
-    float exposure_time = -1.0f; // <=0 表示不覆盖
+/// @brief 相机参数覆盖（<=0 表示不覆盖）
+struct CameraOverride
+{
+    float exposure_time = -1.0f;
+};
 
-    // ROI 裁剪参数
-    struct RoiParam
-    {
-        bool enabled = false;
-        double row1 = 0, col1 = 0, row2 = 0, col2 = 0;
-    } roi;
+/// @brief ROI 裁剪（通用前处理）
+struct RoiParam
+{
+    bool enabled = false;
+    double row1 = 0, col1 = 0, row2 = 0, col2 = 0;
+};
 
-    // YOLO 检测参数
-    struct YoloParam
-    {
-        bool enabled = false;
-        std::string model_path;
-        float score_threshold = 0.5f;
-        float nms_threshold = 0.5f;
-        std::string task_type = "YOLO_DET"; // "YOLO_DET" | "YOLO_OBB"
-        bool end2end = false;
-    } yolo;
+struct WorkflowParam
+{
+    std::string camera_name; // 绑定相机
+    std::string comm_name;   // 绑定通信通道
+    bool enabled = false;
+
+    TriggerConfig trigger;
+    IoConfig io;
+    CameraOverride camera_override;
+    RoiParam roi;
+
+    /// 检测器参数：monostate = 不检测，TerminalParam = 端子检测
+    std::variant<std::monostate, TerminalParam> detector_param;
+
+    /// @brief workflow map key：camera_name + "_" + di_addr
+    std::string key() const { return camera_name + "_" + std::to_string(trigger.di_addr); }
 };
 
 struct CommunicationParam
